@@ -1,0 +1,24 @@
+// SPDX-License-Identifier: MIT
+//
+// SPDX-FileCopyrightText: Copyright(c) 2026 Otonashi Horobu
+
+#include <zephyrus/version.hpp>
+
+namespace zephyrus {
+const std::string release_version{"@RELEASE_VERSION@"};
+
+const std::string branch_name{"@BRANCH_NAME@"};
+
+const std::string commit_hash{"@COMMIT_HASH@"};
+
+const std::string full_version() noexcept {
+    static const std::string full_version_static{
+        fmt::format("Zephyrus ACR {} [git {}:{}]"
+#if !defined(NDEBUG) || defined(_DEBUG)
+                    " [debug]"
+#endif
+                    ,
+                    release_version, branch_name, commit_hash)};
+    return full_version_static;
+}
+} // namespace zephyrus
