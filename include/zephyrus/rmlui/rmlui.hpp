@@ -5,5 +5,5 @@
 #pragma once
 
 namespace zephyrus::rmlui {
-void setup_rmlui() noexcept;
+void setup_rmlui();
 }

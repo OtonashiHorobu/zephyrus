@@ -8,6 +8,6 @@
 int main() {
     zephyrus::log::setup_logger();
     auto logger{spdlog::get("zephyrus")};
-    SPDLOG_LOGGER_INFO(logger, zephyrus::full_version());
+    SPDLOG_LOGGER_INFO(logger, zephyrus::version::full_version());
     return 0;
 }

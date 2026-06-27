@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 4.2)
 project(ZephyrusACR LANGUAGES C CXX)
 
 set(BUILD_SHARED_LIBS OFF)
+set(BUILD_TESTING ON)
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -34,19 +35,22 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_link_options(-static-libstdc++ -static-libgcc)
-    add_compile_options(-Wall -Wextra)
     if(CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
         add_compile_options(-fvisibility=hidden)
     endif()
 endif()
 
-enable_testing()
+add_compile_options(-Wall -Wextra)
+
+if (BUILD_TESTING)
+    enable_testing()
+endif()
 
 set(RELEASE_VERSION "0.1.0-alpha")
 set(BRANCH_NAME "")
 set(COMMIT_HASH "")
 
-find_package(Git REQUIRED)
+find_package(Git)
 
 if (GIT_FOUND)
     execute_process(
@@ -82,6 +86,8 @@ include_directories(
 add_library(zephyrus-core STATIC
     "${PROJECT_BINARY_DIR}/version.cpp"
     src/zephyrus/rmlui/cmrc_file_interface.cpp
+    src/zephyrus/log.cpp
+    src/zephyrus/version.cpp
 )
 add_library(Zephyrus::Core ALIAS zephyrus-core)
 target_link_libraries(zephyrus-core PUBLIC
@@ -90,18 +96,20 @@ target_link_libraries(zephyrus-core PUBLIC
     spdlog::spdlog
     RmlUi::Core
 )
-target_compile_definitions(zephyrus-core PRIVATE ZEPHYRUS_LIB)
+target_compile_options(zephyrus-core PRIVATE -Werror)
 
 add_executable(zephyrus-standalone
     src/zephyrus/zephyrus_standalone.cpp
 )
 target_link_libraries(zephyrus-standalone PRIVATE Zephyrus::Core)
+target_compile_options(zephyrus-standalone PRIVATE -Werror)
 
 add_library(zephyrus-acr SHARED
     src/zephyrus/zephyrus_acr.cpp
 )
 add_library(Zephyrus::ACR ALIAS zephyrus-acr)
 target_link_libraries(zephyrus-acr PRIVATE Zephyrus::Core)
+target_compile_options(zephyrus-acr PRIVATE -Werror)
 
 file(GLOB_RECURSE TEST_SRCS test/*.cpp)
 foreach(test_case ${TEST_SRCS})
@@ -115,3 +123,4 @@ foreach(test_case ${TEST_SRCS})
 endforeach()
 
 target_link_libraries(cmrc-file-interface-test PRIVATE Zephyrus::Asset::Test)
+target_link_libraries(cmrc-file-interface-thread-test PRIVATE Zephyrus::Asset::Test)

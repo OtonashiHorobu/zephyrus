@@ -10,6 +10,6 @@
 __attribute__((constructor)) void zephyrus_ctor() noexcept {
     zephyrus::log::setup_logger();
     auto logger{spdlog::get("zephyrus")};
-    SPDLOG_LOGGER_INFO(logger, zephyrus::full_version());
+    SPDLOG_LOGGER_INFO(logger, zephyrus::version::full_version());
 }
 #endif

@@ -5,7 +5,6 @@
 #include <zephyrus/rmlui/cmrc_file_interface.hpp>
 
 #include <boost/ut.hpp>
-
 #include <cmrc/cmrc.hpp>
 
 CMRC_DECLARE(zephyrus::asset::test);

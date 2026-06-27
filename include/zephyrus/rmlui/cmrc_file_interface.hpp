@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <unordered_set>
 
 #include <cmrc/cmrc.hpp>
@@ -20,7 +21,7 @@ struct cmrc_file_handle_data;
  */
 class cmrc_file_interface : public Rml::FileInterface {
   public:
-    explicit cmrc_file_interface(cmrc::embedded_filesystem fs) noexcept;
+    explicit cmrc_file_interface(const cmrc::embedded_filesystem &fs) noexcept;
     virtual ~cmrc_file_interface() noexcept;
 
     Rml::FileHandle Open(const Rml::String &path) noexcept override;
@@ -33,5 +34,6 @@ class cmrc_file_interface : public Rml::FileInterface {
   private:
     cmrc::embedded_filesystem fs_;
     std::unordered_set<cmrc_file_handle_data *> open_files_;
+    mutable std::mutex mutex_;
 };
 } // namespace zephyrus::rmlui
