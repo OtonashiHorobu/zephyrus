@@ -91,6 +91,7 @@ add_library(zephyrus-core STATIC
     src/zephyrus/rmlui/cmrc_file_interface.cpp
     src/zephyrus/log.cpp
     src/zephyrus/version.cpp
+    src/zephyrus/zephyrus.cpp
 )
 add_library(Zephyrus::Core ALIAS zephyrus-core)
 target_link_libraries(zephyrus-core PUBLIC

@@ -2,6 +2,7 @@
 //
 // SPDX-FileCopyrightText: Copyright(c) 2026 Otonashi Horobu
 
+#include <zephyrus/log.hpp>
 #include <zephyrus/rmlui/cmrc_file_interface.hpp>
 
 #include <boost/ut.hpp>
@@ -13,6 +14,8 @@ int main() {
     using namespace boost::ut;
     using namespace std::literals;
     using zephyrus::rmlui::cmrc_file_interface;
+
+    zephyrus::log::init_logger();
 
     auto fs{cmrc::zephyrus::asset::test::get_filesystem()};
 

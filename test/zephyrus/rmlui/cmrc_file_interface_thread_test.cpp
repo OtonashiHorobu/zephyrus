@@ -29,7 +29,7 @@ int main() {
         const char *files[]{"hello.txt", "empty.txt", "dir/nested.txt",
                             "dir/deep/leaf.txt"};
 
-        for (int i = 0; i < kThreadCount; ++i) {
+        for (int i{}; i < kThreadCount; ++i) {
             threads.emplace_back([&iface, &success_count, i, &files] {
                 auto handle{iface.Open(files[i % 4])};
                 if (handle != 0) {
@@ -52,7 +52,7 @@ int main() {
         std::vector<std::thread> threads;
         std::atomic<int> success_count{0};
 
-        for (int i = 0; i < kThreadCount; ++i) {
+        for (int i{}; i < kThreadCount; ++i) {
             threads.emplace_back([&iface, &success_count] {
                 auto handle{iface.Open("hello.txt")};
                 expect(handle != 0);
@@ -79,7 +79,7 @@ int main() {
         std::vector<std::thread> threads;
         std::atomic<size_t> total_bytes{0};
 
-        for (int i = 0; i < kThreadCount; ++i) {
+        for (int i{}; i < kThreadCount; ++i) {
             threads.emplace_back([&iface, &total_bytes, handle] {
                 char buf[4]{};
                 for (;;) {
@@ -104,7 +104,7 @@ int main() {
         std::vector<std::thread> threads;
         std::atomic<int> success_count{0};
 
-        for (int i = 0; i < kThreadCount; ++i) {
+        for (int i{}; i < kThreadCount; ++i) {
             threads.emplace_back([&iface, &success_count] {
                 auto handle{iface.Open("hello.txt")};
                 expect(handle != 0);
@@ -136,9 +136,9 @@ int main() {
         std::vector<std::thread> threads;
         std::atomic<int> total_operations{0};
 
-        for (int i = 0; i < kThreadCount; ++i) {
+        for (int i{}; i < kThreadCount; ++i) {
             threads.emplace_back([&iface, &total_operations] {
-                for (int j = 0; j < 100; ++j) {
+                for (int j{}; j < 100; ++j) {
                     auto handle{iface.Open("hello.txt")};
                     expect(handle != 0);
                     char buf[13]{};

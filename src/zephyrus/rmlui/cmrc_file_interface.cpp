@@ -20,6 +20,8 @@ cmrc_file_interface::cmrc_file_interface(
 
 cmrc_file_interface::~cmrc_file_interface() noexcept {
     std::lock_guard lock{mutex_};
+    ZEPHYRUS_TRACE("cmrc_file_interface: freeing {} file pointers",
+                   open_files_.size());
     for (auto *const ptr : open_files_) {
         delete ptr;
     }
@@ -32,17 +34,10 @@ Rml::FileHandle cmrc_file_interface::Open(const Rml::String &path) noexcept {
         open_files_.insert(handle);
         return reinterpret_cast<Rml::FileHandle>(handle);
     } catch (const std::exception &e) { // no such file or directory
-        auto logger{spdlog::get("zephyrus")};
-        if (logger) {
-            SPDLOG_LOGGER_WARN(logger, "cmrc_file_interface: {}", e.what());
-        }
+        ZEPHYRUS_ERROR("cmrc_file_interface: {}", e.what());
         return 0;
     } catch (...) {
-        auto logger{spdlog::get("zephyrus")};
-        if (logger) {
-            SPDLOG_LOGGER_WARN(logger,
-                               "cmrc_file_interface: unknown exception");
-        }
+        ZEPHYRUS_WARN("cmrc_file_interface: unknown exception");
         return 0;
     }
 }
