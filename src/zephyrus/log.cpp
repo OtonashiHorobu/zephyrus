@@ -10,14 +10,21 @@
 namespace zephyrus::log {
 void init_logger() {
     using namespace spdlog;
-    if (get("zephyrus")) { // already exists
+    if (get(ZEPHYRUS_LOGGER_NAME)) { // already exists
         return;
     }
     auto console_sink{std::make_shared<sinks::stdout_color_sink_mt>()};
     auto file_sink{std::make_shared<sinks::rotating_file_sink_mt>(
         "zephyrus.log", 10240, 10, true)};
     auto zephyrus_logger{std::make_shared<logger>(
-        "zephyrus", sinks_init_list{console_sink, file_sink})};
+        ZEPHYRUS_LOGGER_NAME, sinks_init_list{console_sink, file_sink})};
+    zephyrus_logger->set_level(
+#ifndef NDEBUG
+        spdlog::level::trace
+#else
+        spdlog::level::info
+#endif
+    );
     register_logger(zephyrus_logger);
 }
 } // namespace zephyrus::log

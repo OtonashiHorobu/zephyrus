@@ -4,13 +4,16 @@
 
 #pragma once
 
-#include <memory>
+#include <zephyrus/rmlui/rmlui.hpp>
 
 namespace zephyrus {
 class zephyrus {
   public:
     int init();
+
+  private:
+    rmlui::rmlui rmlui_;
 };
 
-inline std::unique_ptr<zephyrus> g_zephyrus;
+zephyrus &global_zephyrus() noexcept;
 } // namespace zephyrus

@@ -4,8 +4,4 @@
 
 #include <zephyrus/zephyrus.hpp>
 
-int main() {
-    using namespace zephyrus;
-    g_zephyrus = std::make_unique<class zephyrus>();
-    return g_zephyrus->init();
-}
+int main() { zephyrus::global_zephyrus().init(); }

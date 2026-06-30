@@ -262,4 +262,240 @@ int main() {
 
         iface.Close(handle);
     };
+
+    "open_empty_string_path_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("")};
+        expect(handle == 0);
+    };
+
+    "open_path_traversal_parent_ref_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        expect(iface.Open("../hello.txt") == 0);
+    };
+
+    "open_path_traversal_deep_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        expect(iface.Open("../../etc/passwd") == 0);
+    };
+
+    "open_path_traversal_dotdot_slash_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        expect(iface.Open("dir/../../hello.txt") == 0);
+    };
+
+    "close_null_handle_does_not_crash"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        iface.Close(0);
+    };
+
+    "close_many_handles_for_same_file"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        constexpr int count{16};
+        Rml::FileHandle handles[count]{};
+        for (int i{}; i < count; ++i) {
+            handles[i] = iface.Open("hello.txt");
+            expect(handles[i] != 0);
+        }
+        for (int i{}; i < count; ++i) {
+            iface.Close(handles[i]);
+        }
+    };
+
+    "read_with_null_buffer_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(handle != 0);
+        auto n{iface.Read(nullptr, 16, handle)};
+        expect(n == 0_u);
+        iface.Close(handle);
+    };
+
+    "read_with_zero_size_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(handle != 0);
+        char buf[16]{};
+        auto n{iface.Read(buf, 0, handle)};
+        expect(n == 0_u);
+        expect(iface.Tell(handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "read_after_seek_to_beginning"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        char buf[16]{};
+        iface.Read(buf, sizeof(buf), handle);
+        expect(iface.Tell(handle) == 13_u);
+        expect(iface.Seek(handle, 0, SEEK_SET));
+        expect(iface.Tell(handle) == 0_u);
+        auto n{iface.Read(buf, sizeof(buf), handle)};
+        expect(n == 13_u);
+        expect(std::string_view{buf, n} == "Hello, world!"sv);
+        iface.Close(handle);
+    };
+
+    "read_after_seek_to_end_returns_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(iface.Seek(handle, 0, SEEK_END));
+        char buf[16]{};
+        auto n{iface.Read(buf, sizeof(buf), handle)};
+        expect(n == 0_u);
+        iface.Close(handle);
+    };
+
+    "read_binary_file_byte_by_byte"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("binary.bin")};
+        expect(handle != 0);
+        const unsigned char expected[] = {0x00, 0x01, 0x02, 0xFF};
+        char c{};
+        for (std::size_t i{}; i < 4; ++i) {
+            auto n{iface.Read(&c, 1, handle)};
+            expect(n == 1_u);
+            expect(static_cast<unsigned char>(c) == expected[i]);
+        }
+        expect(iface.Read(&c, 1, handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "two_reads_split_at_boundary"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        char buf[13]{};
+        auto n1{iface.Read(buf, 6, handle)};
+        expect(n1 == 6_u);
+        expect(std::string_view{buf, n1} == "Hello,"sv);
+        auto n2{iface.Read(buf + 6, 7, handle)};
+        expect(n2 == 7_u);
+        expect(std::string_view{buf + 6, n2} == " world!"sv);
+        expect(iface.Read(buf, 1, handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "read_advances_cursor_correctly_across_multiple_reads"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        char buf[4]{};
+        iface.Read(buf, 2, handle);
+        expect(iface.Tell(handle) == 2_u);
+        iface.Read(buf, 1, handle);
+        expect(iface.Tell(handle) == 3_u);
+        iface.Read(buf, 3, handle);
+        expect(iface.Tell(handle) == 6_u);
+        iface.Close(handle);
+    };
+
+    "seek_zero_from_beginning_stays_at_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(iface.Seek(handle, 0, SEEK_SET));
+        expect(iface.Tell(handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "multiple_sequential_seeks"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(iface.Seek(handle, 5, SEEK_SET));
+        expect(iface.Tell(handle) == 5_u);
+        expect(iface.Seek(handle, 3, SEEK_CUR));
+        expect(iface.Tell(handle) == 8_u);
+        expect(iface.Seek(handle, -2, SEEK_END));
+        expect(iface.Tell(handle) == 11_u);
+        expect(iface.Seek(handle, 0, SEEK_SET));
+        expect(iface.Tell(handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "seek_on_empty_file"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("empty.txt")};
+        expect(handle != 0);
+        expect(iface.Seek(handle, 0, SEEK_SET));
+        expect(iface.Tell(handle) == 0_u);
+        expect(iface.Seek(handle, 5, SEEK_SET));
+        expect(iface.Tell(handle) == 0_u);
+        expect(iface.Seek(handle, -5, SEEK_END));
+        expect(iface.Tell(handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "negative_seek_cur_backwards"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(iface.Seek(handle, 10, SEEK_SET));
+        expect(iface.Tell(handle) == 10_u);
+        expect(iface.Seek(handle, -5, SEEK_CUR));
+        expect(iface.Tell(handle) == 5_u);
+        iface.Close(handle);
+    };
+
+    "seek_then_read_consistent"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        expect(iface.Seek(handle, 7, SEEK_SET));
+        char buf[6]{};
+        auto n{iface.Read(buf, sizeof(buf), handle)};
+        expect(n == 6_u);
+        expect(std::string_view{buf, n} == "world!"sv);
+        iface.Close(handle);
+    };
+
+    "tell_after_seek_and_read"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("hello.txt")};
+        iface.Seek(handle, 5, SEEK_SET);
+        char buf[3]{};
+        iface.Read(buf, 3, handle);
+        expect(iface.Tell(handle) == 8_u);
+        iface.Close(handle);
+    };
+
+    "tell_on_empty_file_is_zero"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        auto handle{iface.Open("empty.txt")};
+        expect(handle != 0);
+        expect(iface.Tell(handle) == 0_u);
+        iface.Close(handle);
+    };
+
+    "two_interfaces_share_filesystem"_test = [&fs] {
+        cmrc_file_interface iface1{fs};
+        cmrc_file_interface iface2{fs};
+        auto h1{iface1.Open("hello.txt")};
+        auto h2{iface2.Open("hello.txt")};
+        expect(h1 != 0);
+        expect(h2 != 0);
+        char buf1[64]{};
+        char buf2[64]{};
+        auto n1{iface1.Read(buf1, sizeof(buf1), h1)};
+        auto n2{iface2.Read(buf2, sizeof(buf2), h2)};
+        expect(n1 == 13_u);
+        expect(n2 == 13_u);
+        expect(std::string_view{buf1, n1} == std::string_view{buf2, n2});
+        iface1.Close(h1);
+        iface2.Close(h2);
+    };
+
+    "open_many_files_simultaneously"_test = [&fs] {
+        cmrc_file_interface iface{fs};
+        constexpr int count{32};
+        Rml::FileHandle handles[count]{};
+        for (int i{}; i < count; ++i) {
+            handles[i] = iface.Open("hello.txt");
+            expect(handles[i] != 0);
+        }
+        for (int i{}; i < count; ++i) {
+            char buf[13]{};
+            auto n{iface.Read(buf, sizeof(buf), handles[i])};
+            expect(n == 13_u);
+            expect(std::string_view{buf, n} == "Hello, world!"sv);
+        }
+        for (int i{}; i < count; ++i) {
+            iface.Close(handles[i]);
+        }
+    };
 }

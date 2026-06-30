@@ -7,10 +7,9 @@
 #include <mutex>
 #include <unordered_set>
 
-#include <cmrc/cmrc.hpp>
-
 #include <RmlUi/Core/FileInterface.h>
 #include <RmlUi/Core/Types.h>
+#include <cmrc/cmrc.hpp>
 
 namespace zephyrus::rmlui {
 struct cmrc_file_handle_data;

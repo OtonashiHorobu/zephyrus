@@ -31,7 +31,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
         add_compile_definitions(_X86_)
     elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
         add_compile_definitions(_AMD64_)
-    # arm64 support may be added later
+        # arm64 support may be added later
     else()
         message(FATAL_ERROR "[Zephyrus ACR] Unknown system processor")
     endif()
@@ -45,7 +45,7 @@ endif()
 
 add_compile_options(-Wall -Wextra)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     enable_testing()
 endif()
 
@@ -55,7 +55,7 @@ set(COMMIT_HASH "")
 
 find_package(Git)
 
-if (GIT_FOUND)
+if(GIT_FOUND)
     execute_process(
         COMMAND ${GIT_EXECUTABLE} symbolic-ref --short -q HEAD
         OUTPUT_VARIABLE BRANCH_NAME
@@ -70,7 +70,7 @@ if (GIT_FOUND)
         ERROR_QUIET
         WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
     )
-endif ()
+endif()
 
 message(STATUS "[Zephyrus ACR] Zephyrus ACR version: ${RELEASE_VERSION} ${BRANCH_NAME}:${COMMIT_HASH}")
 configure_file(version.cpp.in version.cpp @ONLY)
@@ -89,6 +89,7 @@ include_directories(
 add_library(zephyrus-core STATIC
     "${PROJECT_BINARY_DIR}/version.cpp"
     src/zephyrus/rmlui/cmrc_file_interface.cpp
+    src/zephyrus/rmlui/rmlui.cpp
     src/zephyrus/log.cpp
     src/zephyrus/version.cpp
     src/zephyrus/zephyrus.cpp
