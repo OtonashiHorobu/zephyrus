@@ -86,14 +86,9 @@ include_directories(
     include
 )
 
-add_library(zephyrus-core STATIC
-    "${PROJECT_BINARY_DIR}/version.cpp"
-    src/zephyrus/rmlui/cmrc_file_interface.cpp
-    src/zephyrus/rmlui/rmlui.cpp
-    src/zephyrus/log.cpp
-    src/zephyrus/version.cpp
-    src/zephyrus/zephyrus.cpp
-)
+
+file(GLOB_RECURSE ZEPHYRUS_CORE_SRCS "${PROJECT_BINARY_DIR}/version.cpp" "${PROJECT_SOURCE_DIR}/src/zephyrus/*.cpp")
+add_library(zephyrus-core STATIC ${ZEPHYRUS_CORE_SRCS})
 add_library(Zephyrus::Core ALIAS zephyrus-core)
 target_link_libraries(zephyrus-core PUBLIC
     Zephyrus::Asset
@@ -103,15 +98,11 @@ target_link_libraries(zephyrus-core PUBLIC
 )
 target_compile_options(zephyrus-core PRIVATE -Werror)
 
-add_executable(zephyrus-standalone
-    src/zephyrus/zephyrus_standalone.cpp
-)
+add_executable(zephyrus-standalone src/zephyrus_standalone.cpp)
 target_link_libraries(zephyrus-standalone PRIVATE Zephyrus::Core)
 target_compile_options(zephyrus-standalone PRIVATE -Werror)
 
-add_library(zephyrus-acr SHARED
-    src/zephyrus/zephyrus_acr.cpp
-)
+add_library(zephyrus-acr SHARED src/zephyrus_acr.cpp)
 add_library(Zephyrus::ACR ALIAS zephyrus-acr)
 target_link_libraries(zephyrus-acr PRIVATE Zephyrus::Core)
 target_compile_options(zephyrus-acr PRIVATE -Werror)
