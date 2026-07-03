@@ -11,17 +11,18 @@
 
 namespace zephyrus::log {
 logging_manager::result_type logging_manager::init_impl() noexcept {
-    using namespace spdlog;
-    if (get(ZEPHYRUS_LOGGER_NAME) || spdlog::thread_pool()) { // already exists
+    if (spdlog::get(ZEPHYRUS_LOGGER_NAME) ||
+        spdlog::thread_pool()) { // already exists
         return std::unexpected{"logger already initialized"};
     }
-    init_thread_pool(8192, 1);
-    auto console_sink{std::make_shared<sinks::stdout_color_sink_mt>()};
-    auto file_sink{std::make_shared<sinks::rotating_file_sink_mt>(
+    spdlog::init_thread_pool(8192, 1);
+    auto console_sink{std::make_shared<spdlog::sinks::stdout_color_sink_mt>()};
+    auto file_sink{std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         "zephyrus.log", 10240, 10, true)};
-    auto zephyrus_logger{std::make_shared<async_logger>(
-        ZEPHYRUS_LOGGER_NAME, sinks_init_list{console_sink, file_sink},
-        thread_pool())};
+    auto zephyrus_logger{std::make_shared<spdlog::async_logger>(
+        ZEPHYRUS_LOGGER_NAME,
+        spdlog::sinks_init_list{std::move(console_sink), std::move(file_sink)},
+        spdlog::thread_pool())};
     zephyrus_logger->set_level(
 #ifndef NDEBUG
         spdlog::level::trace
@@ -29,8 +30,10 @@ logging_manager::result_type logging_manager::init_impl() noexcept {
         spdlog::level::info
 #endif
     );
-    register_logger(zephyrus_logger);
+    spdlog::register_logger(zephyrus_logger);
     spdlog::set_default_logger(zephyrus_logger);
     return {};
 }
+
+void logging_manager::shutdown_impl() noexcept { spdlog::shutdown(); }
 } // namespace zephyrus::log

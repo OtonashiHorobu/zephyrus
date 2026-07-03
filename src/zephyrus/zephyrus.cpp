@@ -14,7 +14,7 @@
 #include <boost/di.hpp>
 
 namespace zephyrus {
-int zephyrus::init() {
+int zephyrus::init() noexcept {
     if (auto result{logging_manager_.init()}; !result) {
         fmt::println("zephyrus: failed to initialize logging system: {}",
                      result.error());
@@ -29,11 +29,17 @@ int zephyrus::init() {
     return 0;
 }
 
+void zephyrus::shutdown() noexcept {
+    rmlui_manager_.shutdown();
+    logging_manager_.shutdown();
+}
+
 zephyrus &g_zephyrus() noexcept {
     using namespace boost::di;
-    static zephyrus static_zephyrus{
-        make_injector(bind<>.to(cmrc::zephyrus::asset::ui::get_filesystem()))
-            .create<zephyrus>()};
+    static rmlui::cmrc_file_interface static_file_interface{
+        cmrc::zephyrus::asset::ui::get_filesystem()};
+    static auto static_zephyrus{
+        make_injector(bind<>.to(&static_file_interface)).create<zephyrus>()};
     return static_zephyrus;
 }
 } // namespace zephyrus

@@ -4,4 +4,8 @@
 
 #include <zephyrus/zephyrus.hpp>
 
-int main() { zephyrus::g_zephyrus().init(); }
+int main() {
+    const auto result{zephyrus::g_zephyrus().init()};
+    zephyrus::g_zephyrus().shutdown();
+    return result;
+}

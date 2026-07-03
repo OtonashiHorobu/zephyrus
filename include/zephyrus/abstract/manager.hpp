@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <atomic>
 #include <expected>
 #include <string>
 
@@ -13,11 +14,33 @@ template <typename Derived> class manager {
     using result_type = std::expected<void, std::string>;
 
     result_type init() noexcept {
-        return static_cast<Derived *>(this)->init_impl();
+        if (initialized_) {
+            return std::unexpected{"already initialized"};
+        }
+        const auto result{static_cast<Derived *>(this)->init_impl()};
+        if (result) {
+            initialized_ = true;
+        }
+        return result;
     }
 
+    void shutdown() noexcept {
+        if (!initialized_) {
+            return;
+        }
+        static_cast<Derived *>(this)->shutdown_impl();
+        initialized_ = false;
+    }
+
+    manager(manager &&other) noexcept
+        : initialized_{other.initialized_.exchange(false)} {}
+
+    ~manager() noexcept { shutdown(); }
+
   protected:
-    manager() = default;
-    ~manager() = default;
+    manager() noexcept = default;
+
+  private:
+    std::atomic<bool> initialized_;
 };
 } // namespace zephyrus::abstract

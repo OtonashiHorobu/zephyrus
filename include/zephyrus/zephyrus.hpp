@@ -15,7 +15,8 @@ class zephyrus {
         : rmlui_manager_{std::move(rmlui_manager)},
           logging_manager_{std::move(logging_manager)} {}
 
-    int init();
+    [[nodiscard]] int init() noexcept;
+    void shutdown() noexcept;
 
   private:
     rmlui::rmlui_manager rmlui_manager_;

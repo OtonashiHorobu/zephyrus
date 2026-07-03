@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include <memory>
-
 #include <zephyrus/abstract/manager.hpp>
 #include <zephyrus/rmlui/cmrc_file_interface.hpp>
 
@@ -13,15 +11,13 @@ namespace zephyrus::rmlui {
 class rmlui_manager : public abstract::manager<rmlui_manager> {
   public:
     rmlui_manager() noexcept : manager<rmlui_manager>{} {}
-    explicit rmlui_manager(
-        std::shared_ptr<cmrc_file_interface> file_interface) noexcept
-        : manager<rmlui_manager>{}, file_interface_{std::move(file_interface)} {
-    }
-    ~rmlui_manager() noexcept;
+    explicit rmlui_manager(cmrc_file_interface *const file_interface) noexcept
+        : manager<rmlui_manager>{}, file_interface_{file_interface} {}
 
     result_type init_impl() noexcept;
+    void shutdown_impl() noexcept;
 
   private:
-    std::shared_ptr<cmrc_file_interface> file_interface_;
+    cmrc_file_interface *file_interface_;
 };
 } // namespace zephyrus::rmlui
