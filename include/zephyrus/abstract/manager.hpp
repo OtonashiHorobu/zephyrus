@@ -13,7 +13,7 @@ template <typename Derived> class manager {
   public:
     using result_type = std::expected<void, std::string>;
 
-    result_type init() noexcept {
+    [[nodiscard]] result_type init() noexcept {
         if (initialized_) {
             return std::unexpected{"already initialized"};
         }

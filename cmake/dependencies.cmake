@@ -6,6 +6,8 @@ message(STATUS "[Zephyrus ACR] Downloading CPM...")
 include("${PROJECT_SOURCE_DIR}/cmake/get-cpm.cmake")
 
 function(setup_dependencies)
+    find_package(OpenGL REQUIRED)
+
     CPMAddPackage(
         URI "gh:TheLartians/Ccache.cmake@1.2.5#639f153a960f04407618a68d4dc68c9e6c3cd10d"
         OVERRIDE_FIND_PACKAGE
@@ -97,6 +99,7 @@ function(setup_dependencies)
         "SKIP_INSTALL_ALL ON"
     )
     add_library(HarfBuzz::HarfBuzz ALIAS harfbuzz)
+    add_library(harfbuzz::harfbuzz ALIAS harfbuzz)
 
     CPMAddPackage(
         URI "gh:freetype/freetype@2.14.3#0a0221a1347e2f1e07c395263540026e9a0aa7c7"
@@ -139,6 +142,11 @@ function(setup_dependencies)
     )
 
     CPMAddPackage(
+        URI "gh:libsdl-org/sdl12-compat@1.2.76#8b3be24e25aecea84bb9ccc027fa71118a92fb6f"
+        OVERRIDE_FIND_PACKAGE
+    )
+
+    CPMAddPackage(
         URI "gh:mikke89/RmlUi@6.2#2230d1a6e8e0848ed87a5761e2a5160b2a175ba4"
         OVERRIDE_FIND_PACKAGE
         OPTIONS
@@ -146,5 +154,7 @@ function(setup_dependencies)
         "RMLUI_SVG_PLUGIN ON"
         "RMLUI_LUA_BINDINGS ON"
         "RMLUI_LUA_BINDINGS_LIBRARY luajit"
+        # "RMLUI_SAMPLES ON"
+        # "RMLUI_HARFBUZZ_SAMPLE ON"
     )
 endfunction()

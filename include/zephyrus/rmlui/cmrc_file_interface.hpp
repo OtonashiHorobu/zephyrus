@@ -21,7 +21,7 @@ struct cmrc_file_handle_data;
 class cmrc_file_interface : public Rml::FileInterface {
   public:
     explicit cmrc_file_interface(cmrc::embedded_filesystem fs) noexcept;
-    virtual ~cmrc_file_interface() noexcept;
+    ~cmrc_file_interface() noexcept override;
 
     Rml::FileHandle Open(const Rml::String &path) noexcept override;
     void Close(Rml::FileHandle file) noexcept override;

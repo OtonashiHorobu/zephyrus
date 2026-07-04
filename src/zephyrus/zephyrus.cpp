@@ -2,7 +2,6 @@
 //
 // SPDX-FileCopyrightText: Copyright(c) 2026 Otonashi Horobu
 
-#include <zephyrus/asset/ui.hpp>
 #include <zephyrus/log.hpp>
 #include <zephyrus/log/logging_manager.hpp>
 #include <zephyrus/rmlui/rmlui_manager.hpp>
@@ -11,35 +10,28 @@
 
 #include <fmt/format.h>
 
-#include <boost/di.hpp>
-
 namespace zephyrus {
-int zephyrus::init() noexcept {
+zephyrus::result_type zephyrus::init_impl() noexcept {
     if (auto result{logging_manager_.init()}; !result) {
-        fmt::println("zephyrus: failed to initialize logging system: {}",
-                     result.error());
-        return 1;
+        return std::unexpected{
+            fmt::format("zephyrus: failed to initialize logging system: {}",
+                        result.error())};
     }
     ZEPHYRUS_INFO(version::full_version());
     ZEPHYRUS_INFO("initializing zephyrus");
     if (auto result{rmlui_manager_.init()}; !result) {
-        ZEPHYRUS_CRITICAL("failed to initialize rmlui: {}", result.error());
-        return 1;
+        return std::unexpected{
+            fmt::format("failed to initialize rmlui: {}", result.error())};
     }
-    return 0;
+    return {};
 }
 
-void zephyrus::shutdown() noexcept {
+void zephyrus::shutdown_impl() noexcept {
     rmlui_manager_.shutdown();
     logging_manager_.shutdown();
 }
 
-zephyrus &g_zephyrus() noexcept {
-    using namespace boost::di;
-    static rmlui::cmrc_file_interface static_file_interface{
-        cmrc::zephyrus::asset::ui::get_filesystem()};
-    static auto static_zephyrus{
-        make_injector(bind<>.to(&static_file_interface)).create<zephyrus>()};
-    return static_zephyrus;
+Rml::Context *zephyrus::get_rmlui_context() const noexcept {
+    return rmlui_manager_.get_context();
 }
 } // namespace zephyrus

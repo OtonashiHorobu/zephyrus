@@ -20,8 +20,8 @@ cmrc_file_interface::cmrc_file_interface(cmrc::embedded_filesystem fs) noexcept
 cmrc_file_interface::~cmrc_file_interface() noexcept {
     std::lock_guard lock{mutex_};
     for (auto *const ptr : open_files_) {
-        ZEPHYRUS_WARN("freeing stale file pointer {:#x}",
-                      reinterpret_cast<std::uintptr_t>(ptr));
+        ZEPHYRUS_DEBUG("freeing stale file pointer {:#x}",
+                       reinterpret_cast<std::uintptr_t>(ptr));
         delete ptr;
     }
 }
@@ -35,17 +35,17 @@ Rml::FileHandle cmrc_file_interface::Open(const Rml::String &path) noexcept {
         open_files_.insert(handle);
         return reinterpret_cast<Rml::FileHandle>(handle);
     } catch (const std::exception &e) { // no such file or directory
-        ZEPHYRUS_ERROR("{}", e.what());
+        ZEPHYRUS_ERROR("{} in Open()", e.what());
         return 0;
     } catch (...) {
-        ZEPHYRUS_WARN("unknown exception");
+        ZEPHYRUS_ERROR("unknown exception in Open()");
         return 0;
     }
 }
 
 void cmrc_file_interface::Close(const Rml::FileHandle file) noexcept {
     if (!file) {
-        ZEPHYRUS_WARN("null file pointer in Close()");
+        ZEPHYRUS_DEBUG("null file pointer in Close()");
         return;
     }
 
@@ -56,23 +56,23 @@ void cmrc_file_interface::Close(const Rml::FileHandle file) noexcept {
                        reinterpret_cast<std::uintptr_t>(handle->file.begin()));
         delete handle;
     } else {
-        ZEPHYRUS_WARN("invalid file pointer {:#x} in Close()",
-                      reinterpret_cast<std::uintptr_t>(handle));
+        ZEPHYRUS_DEBUG("invalid file pointer {:#x} in Close()",
+                       reinterpret_cast<std::uintptr_t>(handle));
     }
 }
 
 size_t cmrc_file_interface::Read(void *const buffer, const size_t size,
                                  const Rml::FileHandle file) noexcept {
     if (!buffer || !file) {
-        ZEPHYRUS_WARN("null buffer or file pointer in Read()");
+        ZEPHYRUS_DEBUG("null buffer or file pointer in Read()");
         return 0;
     }
 
     std::lock_guard lock{mutex_};
     auto *const handle{reinterpret_cast<cmrc_file_handle_data *>(file)};
     if (!open_files_.contains(handle)) {
-        ZEPHYRUS_WARN("invalid file pointer {:#x} in Read()",
-                      reinterpret_cast<std::uintptr_t>(handle));
+        ZEPHYRUS_DEBUG("invalid file pointer {:#x} in Read()",
+                       reinterpret_cast<std::uintptr_t>(handle));
         return 0;
     }
 
@@ -92,15 +92,15 @@ size_t cmrc_file_interface::Read(void *const buffer, const size_t size,
 bool cmrc_file_interface::Seek(const Rml::FileHandle file, const long offset,
                                const int origin) noexcept {
     if (!file) {
-        ZEPHYRUS_WARN("null file pointer in Seek()");
+        ZEPHYRUS_DEBUG("null file pointer in Seek()");
         return false;
     }
 
     std::lock_guard lock{mutex_};
     auto *const handle{reinterpret_cast<cmrc_file_handle_data *>(file)};
     if (!open_files_.contains(handle)) {
-        ZEPHYRUS_WARN("invalid file pointer {:#x} in Seek()",
-                      reinterpret_cast<std::uintptr_t>(handle));
+        ZEPHYRUS_DEBUG("invalid file pointer {:#x} in Seek()",
+                       reinterpret_cast<std::uintptr_t>(handle));
         return false;
     }
 
@@ -116,7 +116,7 @@ bool cmrc_file_interface::Seek(const Rml::FileHandle file, const long offset,
         base = handle->file.end();
         break;
     default:
-        ZEPHYRUS_WARN("invalid origin {} in Seek()", origin);
+        ZEPHYRUS_DEBUG("invalid origin {} in Seek()", origin);
         return false;
     }
 
@@ -130,15 +130,15 @@ bool cmrc_file_interface::Seek(const Rml::FileHandle file, const long offset,
 
 size_t cmrc_file_interface::Tell(const Rml::FileHandle file) noexcept {
     if (!file) {
-        ZEPHYRUS_WARN("null file pointer in Tell()");
+        ZEPHYRUS_DEBUG("null file pointer in Tell()");
         return false;
     }
 
     std::lock_guard lock{mutex_};
     auto *const handle{reinterpret_cast<cmrc_file_handle_data *>(file)};
     if (!open_files_.contains(handle)) {
-        ZEPHYRUS_WARN("invalid file pointer {:#x} in Tell()",
-                      reinterpret_cast<std::uintptr_t>(handle));
+        ZEPHYRUS_DEBUG("invalid file pointer {:#x} in Tell()",
+                       reinterpret_cast<std::uintptr_t>(handle));
         return 0;
     }
 

@@ -7,9 +7,6 @@ project(Zephyrus LANGUAGES C CXX)
 
 set(BUILD_SHARED_LIBS OFF)
 set(BUILD_TESTING ON)
-set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
-set(CMAKE_SYSTEM_PREFIX_PATH "")
-set(CMAKE_SYSTEM_LIBRARY_PATH "")
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -87,9 +84,17 @@ include_directories(
 )
 
 
-file(GLOB_RECURSE ZEPHYRUS_CORE_SRCS "${PROJECT_SOURCE_DIR}/src/zephyrus/*.cpp")
-list(APPEND ZEPHYRUS_CORE_SRCS "${PROJECT_BINARY_DIR}/version.cpp")
-add_library(zephyrus-core STATIC ${ZEPHYRUS_CORE_SRCS})
+add_library(zephyrus-core STATIC
+    src/zephyrus/log/logging_manager.cpp
+    src/zephyrus/rmlui/backend/backend_sdl12_gl2.cpp
+    src/zephyrus/rmlui/backend/render_interface_gl2.cpp
+    src/zephyrus/rmlui/backend/system_interface_sdl12.cpp
+    src/zephyrus/rmlui/cmrc_file_interface.cpp
+    src/zephyrus/rmlui/rmlui_manager.cpp
+    src/zephyrus/version.cpp
+    src/zephyrus/zephyrus.cpp
+    "${PROJECT_BINARY_DIR}/version.cpp"
+)
 add_library(Zephyrus::Core ALIAS zephyrus-core)
 target_link_libraries(zephyrus-core PUBLIC
     Zephyrus::Asset
@@ -98,6 +103,12 @@ target_link_libraries(zephyrus-core PUBLIC
     RmlUi::Core
     Boost.DI
     sol2::sol2
+    OpenGL::GL
+    SDL::SDL
+)
+target_include_directories(zephyrus-core PUBLIC
+    "${sdl12_compat_SOURCE_DIR}/include"
+    "${RmlUi_SOURCE_DIR}/Backends"
 )
 target_compile_options(zephyrus-core PRIVATE -Werror)
 
@@ -120,5 +131,4 @@ foreach(test_case ${TEST_SRCS})
     target_link_libraries(${test_name} PRIVATE Zephyrus::Core Boost::ut)
     add_test(${test_name} ${PROJECT_BINARY_DIR}/${test_name})
 endforeach()
-
 target_link_libraries(test-cmrc-file-interface PRIVATE Zephyrus::Asset::Test)
