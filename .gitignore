@@ -2,3 +2,6 @@ build
 .cache
 .vscode
 .idea
+CMakeUserPresets.json
+conan.lock
+zephyrus*.log

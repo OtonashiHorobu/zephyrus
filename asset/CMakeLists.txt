@@ -5,7 +5,9 @@
 cmrc_add_resource_library(zephyrus-asset-ui
     ALIAS Zephyrus::Asset::UI
     NAMESPACE zephyrus::asset::ui
+    ui/esp/esp.rml
     ui/main-menu/main-menu.rml
+    ui/menu/menu.rml
 )
 
 add_library(zephyrus-asset INTERFACE)

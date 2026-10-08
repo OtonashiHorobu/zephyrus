@@ -4,11 +4,15 @@
 
 #include <zephyrus/log.hpp>
 #include <zephyrus/rmlui/backend/system_interface_sdl12.hpp>
+#include <zephyrus/sdl/sdl.hpp>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Input.h>
 #include <RmlUi/Core/StringUtilities.h>
 #include <RmlUi/Core/SystemInterface.h>
+
+#include <chrono>
+#include <dlfcn.h>
 
 namespace {
 // XBM cursor data (MSB-first, 16x16)
@@ -113,12 +117,51 @@ constexpr cursor_def cursor_defs[] = {
     {text_data, text_mask, 7, 7},
     {unavailable_data, unavailable_mask, 7, 7},
 };
+
+/// Clipboard functions live in a modern SDL library loaded by the host (the
+/// SDL 1.2 ABI exposes no clipboard API). Resolved lazily and kept local.
+struct clipboard_api {
+    bool available{};
+    int (*set_text)(const char *text){};
+    char *(*get_text)(){};
+    void (*free_text)(void *memory){};
+};
+
+const clipboard_api &clipboard() {
+    static const clipboard_api api{[] {
+        clipboard_api result{};
+        void *library{dlopen("libSDL2-2.0.so.0", RTLD_NOW | RTLD_LOCAL)};
+        if (library == nullptr) {
+            library = dlopen("libSDL3.so.0", RTLD_NOW | RTLD_LOCAL);
+        }
+        if (library == nullptr) {
+            return result;
+        }
+        result.set_text =
+            reinterpret_cast<int (*)(const char *)>(
+                dlsym(library, "SDL_SetClipboardText"));
+        result.get_text =
+            reinterpret_cast<char *(*)()>(dlsym(library, "SDL_GetClipboardText"));
+        result.free_text =
+            reinterpret_cast<void (*)(void *)>(dlsym(library, "SDL_free"));
+        result.available = result.set_text != nullptr &&
+                           result.get_text != nullptr &&
+                           result.free_text != nullptr;
+        return result;
+    }()};
+    return api;
+}
 } // namespace
 
 namespace zephyrus::backend {
 system_interface_sdl12::~system_interface_sdl12() { free_cursors(); }
 
 void system_interface_sdl12::init_cursors() {
+    const sdl::api *api{sdl::get()};
+    if (api == nullptr) {
+        return;
+    }
+
     struct name_def {
         std::string_view name;
         std::size_t def_index;
@@ -130,25 +173,32 @@ void system_interface_sdl12::init_cursors() {
 
     for (const auto &e : entries) {
         const auto &d{cursor_defs[e.def_index]};
-        cursors_[e.name] = SDL_CreateCursor(
-            const_cast<Uint8 *>(d.data), const_cast<Uint8 *>(d.mask), cursor_w,
-            cursor_h, d.hot_x, d.hot_y);
+        cursors_[e.name] =
+            api->create_cursor(const_cast<Uint8 *>(d.data),
+                               const_cast<Uint8 *>(d.mask), cursor_w, cursor_h,
+                               d.hot_x, d.hot_y);
     }
 }
 
 void system_interface_sdl12::free_cursors() {
+    const sdl::api *api{sdl::get()};
+    // SDL_Quit destroys every cursor it owns; freeing them afterwards would
+    // be a double free. Screenshot the subsystem state before touching SDL.
+    const bool video_alive{api != nullptr &&
+                           api->was_init(SDL_INIT_VIDEO) != 0};
     for (auto &[name, cursor] : cursors_) {
-        if (cursor) {
-            SDL_FreeCursor(cursor);
-            cursor = nullptr;
+        if (cursor && video_alive) {
+            api->free_cursor(cursor);
         }
+        cursor = nullptr;
     }
     cursors_.clear();
 }
 
 double system_interface_sdl12::GetElapsedTime() {
-    static const Uint32 start{SDL_GetTicks()};
-    return static_cast<double>(SDL_GetTicks() - start) / 1000.0;
+    using clock = std::chrono::steady_clock;
+    static const clock::time_point start{clock::now()};
+    return std::chrono::duration<double>(clock::now() - start).count();
 }
 
 bool system_interface_sdl12::LogMessage(const Rml::Log::Type type,
@@ -177,30 +227,56 @@ bool system_interface_sdl12::LogMessage(const Rml::Log::Type type,
 }
 
 void system_interface_sdl12::SetMouseCursor(const Rml::String &cursor_name) {
+    const sdl::api *api{sdl::get()};
+    if (api == nullptr) {
+        return;
+    }
+
     const std::string_view lookup{cursor_name.empty()
                                       ? std::string_view{"arrow"}
                                       : std::string_view{cursor_name}};
 
     auto it{cursors_.find(lookup)};
     if (it != cursors_.end()) {
-        SDL_SetCursor(it->second);
+        api->set_cursor(it->second);
         return;
     }
 
     if (cursor_name.starts_with("rmlui-scroll")) {
         auto scroll_it{cursors_.find("move")};
         if (scroll_it != cursors_.end()) {
-            SDL_SetCursor(scroll_it->second);
+            api->set_cursor(scroll_it->second);
+        }
+    }
+}
+
+void system_interface_sdl12::SetClipboardText(const Rml::String &text) {
+    if (const clipboard_api &api{clipboard()}; api.available) {
+        api.set_text(text.c_str());
+    }
+}
+
+void system_interface_sdl12::GetClipboardText(Rml::String &text) {
+    if (const clipboard_api &api{clipboard()}; api.available) {
+        if (char *value{api.get_text()}; value != nullptr) {
+            text = value;
+            api.free_text(value);
         }
     }
 }
 
 void system_interface_sdl12::ActivateKeyboard(Rml::Vector2f /*caret_position*/,
                                               float /*line_height*/) {
-    SDL_EnableUNICODE(1);
+    if (const sdl::api *api{sdl::get()}; api != nullptr) {
+        api->enable_unicode(1);
+    }
 }
 
-void system_interface_sdl12::DeactivateKeyboard() { SDL_EnableUNICODE(0); }
+void system_interface_sdl12::DeactivateKeyboard() {
+    if (const sdl::api *api{sdl::get()}; api != nullptr) {
+        api->enable_unicode(0);
+    }
+}
 
 bool system_interface_sdl12::handle_input_event(Rml::Context *context,
                                                 SDL_Event &ev) {
@@ -404,7 +480,8 @@ int system_interface_sdl12::convert_mouse_button(int button) {
 }
 
 int system_interface_sdl12::get_key_modifier_state() {
-    const SDLMod sdl_mods{SDL_GetModState()};
+    const SDLMod sdl_mods{sdl::get() != nullptr ? sdl::get()->get_mod_state()
+                                                : KMOD_NONE};
 
     int retval{};
 

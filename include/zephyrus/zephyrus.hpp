@@ -6,10 +6,7 @@
 
 #include <zephyrus/log/logging_manager.hpp>
 #include <zephyrus/rmlui/rmlui_manager.hpp>
-
-namespace Rml {
-class Context;
-}
+#include <zephyrus/util/getter.hpp>
 
 namespace zephyrus {
 enum class backend_mode { standalone, injected };
@@ -17,15 +14,15 @@ enum class backend_mode { standalone, injected };
 class zephyrus : public abstract::manager<zephyrus> {
   public:
     explicit zephyrus(rmlui::rmlui_manager rmlui_manager,
-                      log::logging_manager logging_manager,
-                      [[maybe_unused]] backend_mode mode) noexcept
+                      log::logging_manager logging_manager) noexcept
         : manager<zephyrus>{}, rmlui_manager_{std::move(rmlui_manager)},
           logging_manager_{std::move(logging_manager)} {}
 
     [[nodiscard]] result_type init_impl() noexcept;
     void shutdown_impl() noexcept;
 
-    [[nodiscard]] Rml::Context *get_rmlui_context() const noexcept;
+    ZEPHYRUS_GETTER(rmlui_manager)
+    ZEPHYRUS_GETTER(logging_manager)
 
   private:
     rmlui::rmlui_manager rmlui_manager_;

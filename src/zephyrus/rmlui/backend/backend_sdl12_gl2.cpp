@@ -2,14 +2,18 @@
 //
 // SPDX-FileCopyrightText: Copyright(c) 2026 Otonashi Horobu
 
+#include <memory>
+#include <mutex>
+
+#include <zephyrus/rmlui/backend/backend.hpp>
 #include <zephyrus/rmlui/backend/render_interface_gl2.hpp>
 #include <zephyrus/rmlui/backend/system_interface_sdl12.hpp>
+#include <zephyrus/sdl/sdl.hpp>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/Log.h>
 #include <RmlUi/Core/Math.h>
-#include <RmlUi_Backend.h>
 #include <SDL/SDL.h>
 
 namespace {
@@ -22,111 +26,150 @@ struct backend_data {
     bool injected{};
 };
 
-backend_data &bd() {
-    static backend_data instance{};
-    return instance;
-}
-
-bool g_initialized{};
+std::mutex bd_mutex;
+std::unique_ptr<backend_data> bd;
 } // namespace
 
 namespace Backend {
 bool Initialize(const char *const window_name, const int width,
                 const int height, [[maybe_unused]] const bool allow_resize) {
-    if (g_initialized) {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+
+    if (bd) {
         return false;
     }
 
-    auto &data{bd()};
+    const zephyrus::sdl::api *api{zephyrus::sdl::get()};
+    if (api == nullptr) {
+        Rml::Log::Message(Rml::Log::LT_ERROR, "SDL function table unavailable");
+        return false;
+    }
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+    if (api->init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
         Rml::Log::Message(Rml::Log::LT_ERROR, "SDL_Init failed: %s",
-                          SDL_GetError());
+                          api->get_error());
         return false;
     }
 
-    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    api->gl_set_attribute(SDL_GL_STENCIL_SIZE, 8);
+    api->gl_set_attribute(SDL_GL_DOUBLEBUFFER, 1);
 
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-    SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 2);
+    api->gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+    api->gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 2);
 
     Uint32 flags{SDL_OPENGL | SDL_RESIZABLE};
-    data.sdl_surface = SDL_SetVideoMode(width, height, 0, flags);
+    SDL_Surface *surface{api->set_video_mode(width, height, 0, flags)};
 
-    if (!data.sdl_surface) {
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
-        SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 0);
-        data.sdl_surface = SDL_SetVideoMode(width, height, 0, flags);
+    if (surface == nullptr) {
+        api->gl_set_attribute(SDL_GL_MULTISAMPLEBUFFERS, 0);
+        api->gl_set_attribute(SDL_GL_MULTISAMPLESAMPLES, 0);
+        surface = api->set_video_mode(width, height, 0, flags);
     }
 
-    if (!data.sdl_surface) {
+    if (surface == nullptr) {
         Rml::Log::Message(Rml::Log::LT_ERROR, "SDL_SetVideoMode failed: %s",
-                          SDL_GetError());
+                          api->get_error());
         return false;
     }
 
-    SDL_WM_SetCaption(window_name, nullptr);
+    bd = std::make_unique<backend_data>();
+    bd->sdl_surface = surface;
 
-    data.render_interface.set_viewport(data.sdl_surface->w,
-                                       data.sdl_surface->h);
+    api->wm_set_caption(window_name, nullptr);
 
-    data.system_interface.init_cursors();
+    bd->render_interface.set_viewport(bd->sdl_surface->w, bd->sdl_surface->h);
 
-    g_initialized = true;
+    bd->system_interface.init_cursors();
+
     return true;
 }
 
 bool InitializeInjected() {
-    if (g_initialized) {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+
+    if (bd) {
         return false;
     }
 
-    auto &data{bd()};
-    data.injected = true;
+    bd = std::make_unique<backend_data>();
+    bd->injected = true;
 
-    data.system_interface.init_cursors();
+    bd->system_interface.init_cursors();
 
-    g_initialized = true;
     return true;
 }
 
 void Shutdown() {
-    if (!g_initialized) {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+
+    if (!bd) {
         return;
     }
 
-    auto &data{bd()};
-    data.system_interface.free_cursors();
+    bd->system_interface.free_cursors();
 
-    if (!data.injected) {
-        data.sdl_surface = nullptr;
-        SDL_Quit();
+    if (!bd->injected) {
+        bd->sdl_surface = nullptr;
+        if (const zephyrus::sdl::api *api{zephyrus::sdl::get()};
+            api != nullptr) {
+            api->quit();
+        }
     }
 
-    g_initialized = false;
+    bd.reset();
+}
+
+void Abandon() {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+
+    if (!bd) {
+        return;
+    }
+
+    // SDL_Quit may already have released the cursors; free_cursors() detects
+    // that via SDL_WasInit and skips the SDL calls in that case.
+    bd->system_interface.free_cursors();
+
+    // RmlUi is still initialised (Rml::Shutdown could not run without a GL
+    // context) and references these interfaces, so destroying them here
+    // would be a use-after-free. Leak them: the process is exiting anyway.
+    (void)bd.release();
+}
+
+void SetViewport(int width, int height) {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    if (bd && width > 0 && height > 0) {
+        bd->render_interface.set_viewport(width, height);
+    }
 }
 
 Rml::SystemInterface *GetSystemInterface() {
-    return g_initialized ? &bd().system_interface : nullptr;
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    return bd ? &bd->system_interface : nullptr;
 }
 
 Rml::RenderInterface *GetRenderInterface() {
-    return g_initialized ? &bd().render_interface : nullptr;
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    return bd ? &bd->render_interface : nullptr;
 }
 
 bool ProcessEvents(Rml::Context *const context, const KeyDownCallback callback,
                    const bool power_save) {
     using zephyrus::backend::system_interface_sdl12;
 
-    if (!g_initialized) {
+    const zephyrus::sdl::api *api{zephyrus::sdl::get()};
+    if (api == nullptr) {
         return false;
     }
 
-    auto &data{bd()};
+    std::lock_guard<std::mutex> lock{bd_mutex};
 
-    bool result{data.running};
-    data.running = true;
+    if (!bd) {
+        return false;
+    }
+
+    bool result{bd->running};
+    bd->running = true;
 
     SDL_Event ev;
     bool has_event{};
@@ -134,16 +177,16 @@ bool ProcessEvents(Rml::Context *const context, const KeyDownCallback callback,
     if (power_save) {
         const int timeout_ms{static_cast<int>(
             Rml::Math::Min(context->GetNextUpdateDelay(), 10.0) * 1000)};
-        const Uint32 start{SDL_GetTicks()};
+        const Uint32 start{api->get_ticks()};
         while (!has_event &&
-               (SDL_GetTicks() - start) < static_cast<Uint32>(timeout_ms)) {
-            has_event = SDL_PollEvent(&ev);
+               (api->get_ticks() - start) < static_cast<Uint32>(timeout_ms)) {
+            has_event = api->poll_event(&ev);
             if (!has_event) {
-                SDL_Delay(1);
+                api->delay(1);
             }
         }
     } else {
-        has_event = SDL_PollEvent(&ev);
+        has_event = api->poll_event(&ev);
     }
 
     while (has_event) {
@@ -177,13 +220,13 @@ bool ProcessEvents(Rml::Context *const context, const KeyDownCallback callback,
         } break;
 
         case SDL_VIDEORESIZE: {
-            data.sdl_surface = SDL_SetVideoMode(ev.resize.w, ev.resize.h, 0,
-                                                SDL_OPENGL | SDL_RESIZABLE);
-            if (data.sdl_surface) {
-                data.render_interface.set_viewport(data.sdl_surface->w,
-                                                   data.sdl_surface->h);
-                Rml::Vector2i dimensions{data.sdl_surface->w,
-                                         data.sdl_surface->h};
+            bd->sdl_surface = api->set_video_mode(ev.resize.w, ev.resize.h, 0,
+                                                  SDL_OPENGL | SDL_RESIZABLE);
+            if (bd->sdl_surface) {
+                bd->render_interface.set_viewport(bd->sdl_surface->w,
+                                                  bd->sdl_surface->h);
+                Rml::Vector2i dimensions{bd->sdl_surface->w,
+                                         bd->sdl_surface->h};
                 context->SetDimensions(dimensions);
             }
         } break;
@@ -196,22 +239,42 @@ bool ProcessEvents(Rml::Context *const context, const KeyDownCallback callback,
             system_interface_sdl12::handle_input_event(context, ev);
         }
 
-        has_event = SDL_PollEvent(&ev);
+        has_event = api->poll_event(&ev);
     }
 
     return result;
 }
 
-void RequestExit() { bd().running = false; }
+void RequestExit() {
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    if (bd) {
+        bd->running = false;
+    }
+}
 
 void BeginFrame() {
-    auto &data{bd()};
-    data.render_interface.clear();
-    data.render_interface.begin_frame();
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    if (bd) {
+        // Injected mode draws into the host's live framebuffer: never clear it.
+        if (!bd->injected) {
+            bd->render_interface.clear();
+        }
+        bd->render_interface.begin_frame();
+    }
 }
 
 void PresentFrame() {
-    bd().render_interface.end_frame();
-    SDL_GL_SwapBuffers();
+    std::lock_guard<std::mutex> lock{bd_mutex};
+    if (bd) {
+        bd->render_interface.end_frame();
+        // Injected mode is called from inside the host's swap hook; the swap
+        // itself is performed by the caller.
+        if (!bd->injected) {
+            if (const zephyrus::sdl::api *api{zephyrus::sdl::get()};
+                api != nullptr) {
+                api->gl_swap_buffers();
+            }
+        }
+    }
 }
 } // namespace Backend

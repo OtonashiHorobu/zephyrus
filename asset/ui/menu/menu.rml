@@ -1,0 +1,912 @@
+<rml>
+<head>
+    <style>
+        /* ------------------------------------------------------------------
+           zephyrus overlay menu
+           Layout follows Osiris (top tabs + sidebar + two column sections),
+           the visual language follows Analyst (near-black neutrals, single
+           blue accent, hairlines, monospace, restrained motion).
+           ------------------------------------------------------------------ */
+
+        body
+        {
+            width: 100%;
+            height: 100%;
+            font-family: "JetBrains Mono";
+            font-size: 13dp;
+            color: #e8e8e8;
+            background: transparent;
+        }
+
+        #menu
+        {
+            display: flex;
+            flex-direction: column;
+            position: absolute;
+            /* Positioned from code (menu::materialize_position). Do not use
+               percentage + negative margin centering here: RmlUi resolves the
+               percentage against the element's own size when the size changes
+               and keeps applying the margin to the children's containing
+               block, which offsets every child by half the resize delta. */
+            left: 0dp;
+            top: 0dp;
+            width: 900dp;
+            height: 620dp;
+            background: #131313f2;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 6dp;
+            /* A tight contact shadow plus a soft ambient one. */
+            box-shadow: 0dp 6dp 18dp 1dp #000000b8, 0dp 16dp 40dp 2dp #00000080;
+            overflow: hidden;
+        }
+        #resize-handle
+        {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 20dp;
+            height: 20dp;
+            z-index: 80;
+            cursor: pointer;
+        }
+        #resize-handle .grip
+        {
+            position: absolute;
+            right: 3dp;
+            bottom: 2dp;
+            color: #5c5c5c;
+            font-size: 12dp;
+            transition: color 0.15s cubic-out;
+        }
+        #resize-handle:hover .grip
+        {
+            color: #3c9dff;
+        }
+
+        /* ---------------------------- header ---------------------------- */
+
+        #menu-header
+        {
+            display: flex;
+            align-items: center;
+            height: 52dp;
+            padding-left: 18dp;
+            padding-right: 18dp;
+            gap: 18dp;
+            background: #161616;
+            border-bottom-width: 1dp;
+            border-bottom-color: #262626;
+        }
+
+        #wordmark
+        {
+            font-size: 16dp;
+            font-weight: bold;
+            letter-spacing: 0.08em;
+            color: #e8e8e8;
+            white-space: nowrap;
+        }
+        #wordmark .mark
+        {
+            color: #3c9dff;
+        }
+        #caret
+        {
+            display: inline-block;
+            width: 8dp;
+            height: 14dp;
+            margin-left: 3dp;
+            vertical-align: -2dp;
+            background: #3c9dff;
+            animation: blink 0.55s alternate infinite;
+        }
+        @keyframes blink
+        {
+            from { opacity: 1; }
+            to { opacity: 0.15; }
+        }
+        @keyframes section-in
+        {
+            from { opacity: 0; transform: translateY(8dp); }
+            to { opacity: 1; transform: translateY(0dp); }
+        }
+        @keyframes pop-in
+        {
+            from { opacity: 0; transform: translateY(4dp) scale(0.98); }
+            to { opacity: 1; transform: translateY(0dp) scale(1); }
+        }
+        @keyframes pop-icon
+        {
+            0% { transform: scale(0.4); }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        #tabs
+        {
+            display: flex;
+            align-items: center;
+            gap: 4dp;
+            flex: 1;
+            height: 100%;
+        }
+        .tab
+        {
+            display: flex;
+            align-items: center;
+            height: 100%;
+            padding-left: 14dp;
+            padding-right: 14dp;
+            color: #5c5c5c;
+            font-size: 13dp;
+            letter-spacing: 0.14em;
+            border-bottom-width: 2dp;
+            border-bottom-color: transparent;
+            transition: color 0.15s cubic-out;
+        }
+        .tab:hover
+        {
+            color: #e8e8e8;
+        }
+        .tab.active
+        {
+            color: #e8e8e8;
+            border-bottom-color: #3c9dff;
+        }
+
+        #header-meta
+        {
+            display: flex;
+            align-items: center;
+            gap: 10dp;
+        }
+        .badge
+        {
+            display: inline-block;
+            padding: 3dp 10dp;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 4dp;
+            font-size: 12dp;
+            letter-spacing: 0.08em;
+            color: #9a9a9a;
+        }
+        .badge-primary
+        {
+            border-color: #3c9dff74;
+            color: #3c9dff;
+        }
+        #fps-label
+        {
+            color: #5c5c5c;
+            font-size: 12dp;
+            letter-spacing: 0.08em;
+        }
+
+        /* ----------------------------- body ----------------------------- */
+
+        #menu-main
+        {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+        }
+
+        #sidebar
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 4dp;
+            width: 168dp;
+            padding: 12dp 8dp;
+            background: #161616;
+            border-right-width: 1dp;
+            border-right-color: #262626;
+            position: relative;
+        }
+        #glider
+        {
+            position: absolute;
+            left: 8dp;
+            width: 152dp;
+            height: 34dp;
+            top: 12dp;
+            background: #2222228c;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 5dp;
+            transition: top 0.42s quintic-out, height 0.42s quintic-out;
+            z-index: 0;
+        }
+        .nav-item
+        {
+            display: flex;
+            align-items: center;
+            height: 34dp;
+            padding-left: 12dp;
+            gap: 10dp;
+            color: #9a9a9a;
+            font-size: 13.5dp;
+            letter-spacing: 0.04em;
+            border-radius: 5dp;
+            transition: color 0.15s cubic-out, background 0.15s cubic-out;
+            z-index: 1;
+        }
+        .nav-item .glyph
+        {
+            color: #5c5c5c;
+            font-size: 10dp;
+            width: 10dp;
+            transition: color 0.15s cubic-out, transform 0.18s cubic-out;
+        }
+        .nav-item:hover
+        {
+            color: #e8e8e8;
+            background: #1b1b1b;
+        }
+        .nav-item.active
+        {
+            color: #e8e8e8;
+            background: transparent;
+        }
+        .nav-item.active .glyph
+        {
+            color: #3c9dff;
+            transform: scale(1.25);
+        }
+        .nav-item.hidden
+        {
+            display: none;
+        }
+
+        #content
+        {
+            flex: 1;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            padding: 18dp 24dp;
+        }
+        #content-scroll
+        {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            /* Definite width so the whole tree reflows when the panel is
+               resized instead of keeping the previous (wider) layout. */
+            width: 100%;
+        }
+
+        /* --------------------------- sections --------------------------- */
+
+        .section
+        {
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            margin-bottom: 22dp;
+        }
+        .section-title
+        {
+            display: flex;
+            align-items: center;
+            gap: 8dp;
+            margin-bottom: 12dp;
+            padding-left: 12dp;
+            padding-right: 12dp;
+            font-size: 12.5dp;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #5c5c5c;
+        }
+        .section-title .idx
+        {
+            color: #3c9dff;
+            font-weight: bold;
+        }
+        .section-title .rule
+        {
+            flex: 1;
+            height: 1dp;
+            margin-left: 4dp;
+            background: #262626;
+        }
+
+        .row
+        {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-shrink: 0;
+            min-height: 36dp;
+            padding-left: 12dp;
+            padding-right: 12dp;
+            border-radius: 5dp;
+            transition: background 0.15s cubic-out;
+        }
+        .row:hover
+        {
+            background: #1b1b1b;
+        }
+        .label
+        {
+            color: #9a9a9a;
+            font-size: 14dp;
+            letter-spacing: 0.04em;
+            flex-shrink: 1;
+            min-width: 0;
+            transition: color 0.15s cubic-out;
+        }
+        .row:hover .label
+        {
+            color: #e8e8e8;
+        }
+        .ctrl
+        {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 14dp;
+            flex-shrink: 0;
+        }
+        .value
+        {
+            color: #9a9a9a;
+            font-size: 13dp;
+            text-align: right;
+            min-width: 44dp;
+        }
+        .hint
+        {
+            color: #5c5c5c;
+            font-size: 12.5dp;
+            padding-left: 12dp;
+            padding-right: 12dp;
+            line-height: 1.7;
+        }
+        .key
+        {
+            display: inline-block;
+            padding: 4dp 10dp;
+            background: #1b1b1b;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 4dp;
+            color: #e8e8e8;
+            font-size: 12.5dp;
+            letter-spacing: 0.08em;
+        }
+
+        /* -------------------------- controls ---------------------------- */
+
+        .checkbox
+        {
+            position: relative;
+            width: 18dp;
+            height: 18dp;
+            background: #1b1b1b;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 4dp;
+            transition: background 0.15s cubic-out, border-color 0.15s cubic-out;
+            cursor: pointer;
+        }
+        .checkbox:hover
+        {
+            border-color: #3c9dff;
+        }
+        .checkbox .mark
+        {
+            display: block;
+            text-align: center;
+            font-size: 14dp;
+            line-height: 18dp;
+            color: #0b1220;
+            opacity: 0;
+            transition: opacity 0.15s cubic-out;
+        }
+        .checkbox.checked
+        {
+            background: #3c9dff;
+            border-color: #3c9dff;
+        }
+        .checkbox.checked .mark
+        {
+            opacity: 1;
+            animation: pop-icon 0.25s quintic-out;
+        }
+
+        .slider
+        {
+            position: relative;
+            /* Flexible so the control column adapts to the panel width. */
+            flex: 1;
+            min-width: 100dp;
+            max-width: 190dp;
+            height: 18dp;
+            cursor: pointer;
+        }
+        .slider .track
+        {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 6dp;
+            height: 6dp;
+            background: #222222;
+            border-radius: 2dp;
+        }
+        .slider .fill
+        {
+            position: absolute;
+            left: 0;
+            top: 6dp;
+            height: 6dp;
+            width: 0%;
+            background: #3c9dff;
+            border-radius: 2dp;
+            transition: width 0.15s cubic-out;
+        }
+        .slider .knob
+        {
+            position: absolute;
+            left: 0%;
+            top: 0;
+            width: 16dp;
+            height: 18dp;
+            margin-left: -8dp;
+            background: #e8e8e8;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 4dp;
+            transition: left 0.15s cubic-out, background 0.15s cubic-out, border-color 0.15s cubic-out;
+        }
+        .slider.dragging .fill,
+        .slider.dragging .knob
+        {
+            transition: none;
+        }
+        .slider:hover .knob
+        {
+            background: #3c9dff;
+            border-color: #3c9dff;
+        }
+
+        .combo
+        {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10dp;
+            min-width: 130dp;
+            padding: 6dp 11dp;
+            background: #1b1b1b;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 5dp;
+            transition: border-color 0.15s cubic-out;
+            cursor: pointer;
+        }
+        .combo:hover
+        {
+            border-color: #3c9dff;
+        }
+        .combo .text
+        {
+            color: #e8e8e8;
+            font-size: 13.5dp;
+            letter-spacing: 0.04em;
+        }
+        .combo .caret
+        {
+            color: #5c5c5c;
+            font-size: 13dp;
+            line-height: 13dp;
+        }
+        .combo-popup
+        {
+            position: absolute;
+            left: 0;
+            top: 100%;
+            width: 100%;
+            margin-top: 4dp;
+            padding: 3dp;
+            display: none;
+            background: #1b1b1b;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 5dp;
+            box-shadow: 0dp 10dp 24dp #00000099;
+            z-index: 50;
+        }
+        .combo-popup.open
+        {
+            display: block;
+            animation: pop-in 0.16s quintic-out;
+        }
+        .combo-item
+        {
+            display: block;
+            padding: 4dp 8dp;
+            border-radius: 3dp;
+            color: #9a9a9a;
+            font-size: 12.5dp;
+            letter-spacing: 0.04em;
+            white-space: nowrap;
+            transition: background 0.12s cubic-out, color 0.12s cubic-out;
+        }
+        .combo-item:hover
+        {
+            background: #222222;
+            color: #e8e8e8;
+        }
+        .combo-item.selected
+        {
+            color: #3c9dff;
+        }
+
+        .btn
+        {
+            display: inline-block;
+            padding: 5dp 12dp;
+            background: transparent;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 5dp;
+            color: #9a9a9a;
+            font-size: 12dp;
+            letter-spacing: 0.06em;
+            transition: background 0.15s cubic-out, color 0.15s cubic-out, border-color 0.15s cubic-out, transform 0.15s cubic-out;
+            cursor: pointer;
+        }
+        .btn:hover
+        {
+            background: #1b1b1b;
+            color: #e8e8e8;
+        }
+        .btn:active
+        {
+            background: #222222;
+            transform: scale(0.97);
+        }
+        .btn-primary
+        {
+            background: #3c9dff;
+            border-color: #3c9dff;
+            color: #0b1220;
+            font-weight: bold;
+        }
+        .btn-primary:hover
+        {
+            background: #59acff;
+            border-color: #59acff;
+            color: #0b1220;
+        }
+
+        /* --------------------------- panels ----------------------------- */
+
+        .panel
+        {
+            display: none;
+            flex-direction: column;
+        }
+        .panel.active
+        {
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            width: 100%;
+            animation: panel-in 0.32s quintic-out both;
+        }
+        @keyframes panel-in
+        {
+            from { opacity: 0; transform: translateY(6dp); }
+            to { opacity: 1; transform: translateY(0dp); }
+        }
+
+        /* --------------------------- footer ----------------------------- */
+
+        #menu-footer
+        {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 28dp;
+            padding-left: 14dp;
+            padding-right: 14dp;
+            background: #161616;
+            border-top-width: 1dp;
+            border-top-color: #262626;
+        }
+        #footer-hint
+        {
+            color: #5c5c5c;
+            font-size: 11dp;
+            letter-spacing: 0.06em;
+        }
+        #footer-brand
+        {
+            color: #3c9dff;
+            font-size: 11dp;
+            letter-spacing: 0.06em;
+        }
+    </style>
+</head>
+
+<body>
+<div id="menu">
+    <div id="resize-handle"><span class="grip">&#9698;</span></div>
+    <div id="menu-header">
+        <div id="wordmark">[<span class="mark">zephyrus</span><span id="caret"></span>]</div>
+        <div id="tabs">
+            <div class="tab active" id="tab-aim"><span>AIM</span></div>
+            <div class="tab" id="tab-visuals"><span>VISUALS</span></div>
+            <div class="tab" id="tab-misc"><span>MISC</span></div>
+        </div>
+        <div id="header-meta">
+            <span id="fps-label">-- FPS</span>
+        </div>
+    </div>
+
+    <div id="menu-main">
+        <div id="sidebar">
+            <div id="glider"></div>
+            <div class="nav-item active group-aim" id="nav-aim-main"><span class="glyph">&#9679;</span><span>Main</span></div>
+            <div class="nav-item group-aim" id="nav-aim-trigger"><span class="glyph">&#9679;</span><span>Triggerbot</span></div>
+            <div class="nav-item active group-visuals" id="nav-visuals-esp"><span class="glyph">&#9679;</span><span>ESP</span></div>
+            <div class="nav-item group-visuals" id="nav-visuals-camera"><span class="glyph">&#9679;</span><span>Camera</span></div>
+            <div class="nav-item group-visuals" id="nav-visuals-status"><span class="glyph">&#9679;</span><span>Status</span></div>
+            <div class="nav-item active group-misc" id="nav-misc-general"><span class="glyph">&#9679;</span><span>General</span></div>
+        </div>
+
+        <div id="content">
+            <div id="content-scroll">
+
+                <!-- ======================= AIM / MAIN ======================= -->
+                <section class="panel active" id="panel-aim-main">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Profile</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Weapon profile</span><div class="ctrl">
+                            <div class="combo" id="co-aim-profile">
+                                <span class="text" id="co-aim-profile-text">All weapons</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="co-aim-profile-popup">
+                                    <div class="combo-item selected" id="co-aim-profile-0">All weapons</div>
+                                    <div class="combo-item" id="co-aim-profile-1">Knife</div>
+                                    <div class="combo-item" id="co-aim-profile-2">USP</div>
+                                    <div class="combo-item" id="co-aim-profile-3">M1014</div>
+                                    <div class="combo-item" id="co-aim-profile-4">MP5</div>
+                                    <div class="combo-item" id="co-aim-profile-5">M21</div>
+                                    <div class="combo-item" id="co-aim-profile-6">M16A3</div>
+                                    <div class="combo-item" id="co-aim-profile-7">M67</div>
+                                    <div class="combo-item" id="co-aim-profile-8">Akimbo</div>
+                                    <div class="combo-item" id="co-aim-profile-9">Intervention</div>
+                                    <div class="combo-item" id="co-aim-profile-10">Heal</div>
+                                    <div class="combo-item" id="co-aim-profile-11">Sword</div>
+                                    <div class="combo-item" id="co-aim-profile-12">RPG-7</div>
+                                    <div class="combo-item" id="co-aim-profile-13">AK-47</div>
+                                    <div class="combo-item" id="co-aim-profile-14">M82</div>
+                                    <div class="combo-item" id="co-aim-profile-15">MK12</div>
+                                    <div class="combo-item" id="co-aim-profile-16">M1911</div>
+                                    <div class="combo-item" id="co-aim-profile-17">M16 Pro</div>
+                                    <div class="combo-item" id="co-aim-profile-18">M1014 Pro</div>
+                                    <div class="combo-item" id="co-aim-profile-19">ACR Pro</div>
+                                </div>
+                            </div>
+                        </div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Aimbot</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Enabled</span><div class="ctrl"><div class="checkbox" id="cb-aim-enabled"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-aim">
+                                <span class="text" id="kb-aim-text">On</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-aim-popup">
+                                    <div class="combo-item" id="kb-aim-off">Off</div>
+                                    <div class="combo-item" id="kb-aim-always">Always</div>
+                                    <div class="combo-item" id="kb-aim-hold">Hold</div>
+                                    <div class="combo-item" id="kb-aim-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-aim-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Silent aim</span><div class="ctrl"><div class="checkbox" id="cb-aim-silent"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Auto fire</span><div class="ctrl"><div class="checkbox" id="cb-aim-autofire"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">No recoil</span><div class="ctrl"><div class="checkbox" id="cb-aim-norecoil"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Auto scope</span><div class="ctrl"><div class="checkbox" id="cb-aim-autoscope"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">03</span><span>]</span><span>Targeting</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Priority</span><div class="ctrl">
+                            <div class="combo" id="co-aim-priority">
+                                <span class="text" id="co-aim-priority-text">FOV</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="co-aim-priority-popup">
+                                    <div class="combo-item selected" id="co-aim-priority-0">FOV</div>
+                                    <div class="combo-item" id="co-aim-priority-1">Distance</div>
+                                    <div class="combo-item" id="co-aim-priority-2">Health</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Hitbox</span><div class="ctrl">
+                            <div class="combo" id="co-aim-hitbox">
+                                <span class="text" id="co-aim-hitbox-text">Head</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="co-aim-hitbox-popup">
+                                    <div class="combo-item selected" id="co-aim-hitbox-0">Head</div>
+                                    <div class="combo-item" id="co-aim-hitbox-1">Chest</div>
+                                    <div class="combo-item" id="co-aim-hitbox-2">Stomach</div>
+                                    <div class="combo-item" id="co-aim-hitbox-3">Legs</div>
+                                    <div class="combo-item" id="co-aim-hitbox-4">Lethal</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Hitchance</span><div class="ctrl"><span class="value" id="val-aim-hitchance">50%</span>
+                            <div class="slider" id="sl-aim-hitchance" data-min="0" data-max="100" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-aim-hitchance"></div><div class="knob" id="knob-aim-hitchance"></div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Field of view</span><div class="ctrl"><span class="value" id="val-aim-fov">45&#176;</span>
+                            <div class="slider" id="sl-aim-fov" data-min="1" data-max="180" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-aim-fov"></div><div class="knob" id="knob-aim-fov"></div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Max distance</span><div class="ctrl"><span class="value" id="val-aim-distance">256m</span>
+                            <div class="slider" id="sl-aim-distance" data-min="16" data-max="2048" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-aim-distance"></div><div class="knob" id="knob-aim-distance"></div>
+                            </div>
+                        </div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">04</span><span>]</span><span>Behaviour</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Require visible</span><div class="ctrl"><div class="checkbox" id="cb-aim-visible"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Team check</span><div class="ctrl"><div class="checkbox" id="cb-aim-team"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Head magnet</span><div class="ctrl"><div class="checkbox" id="cb-aim-magnet"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Auto stop</span><div class="ctrl"><div class="checkbox" id="cb-aim-autostop"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Between shots</span><div class="ctrl"><div class="checkbox" id="cb-aim-between"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                </section>
+
+                <!-- ===================== AIM / TRIGGER ====================== -->
+                <section class="panel" id="panel-aim-trigger">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Triggerbot</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Enabled</span><div class="ctrl"><div class="checkbox" id="cb-trig-enabled"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-trigger">
+                                <span class="text" id="kb-trigger-text">On</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-trigger-popup">
+                                    <div class="combo-item" id="kb-trigger-off">Off</div>
+                                    <div class="combo-item" id="kb-trigger-always">Always</div>
+                                    <div class="combo-item" id="kb-trigger-hold">Hold</div>
+                                    <div class="combo-item" id="kb-trigger-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-trigger-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Head magnet</span><div class="ctrl"><div class="checkbox" id="cb-trig-magnet"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Auto fire</span><div class="ctrl"><div class="checkbox" id="cb-trig-autofire"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                </section>
+
+                <!-- ======================= VISUALS / ESP ==================== -->
+                <section class="panel" id="panel-visuals-esp">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>ESP</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Enabled</span><div class="ctrl"><div class="checkbox" id="cb-esp-enabled"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-esp">
+                                <span class="text" id="kb-esp-text">On</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-esp-popup">
+                                    <div class="combo-item" id="kb-esp-off">Off</div>
+                                    <div class="combo-item" id="kb-esp-always">Always</div>
+                                    <div class="combo-item" id="kb-esp-hold">Hold</div>
+                                    <div class="combo-item" id="kb-esp-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-esp-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Box</span><div class="ctrl">
+                            <div class="combo" id="co-esp-box">
+                                <span class="text" id="co-esp-box-text">2D</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="co-esp-box-popup">
+                                    <div class="combo-item" id="co-esp-box-0">None</div>
+                                    <div class="combo-item selected" id="co-esp-box-1">2D</div>
+                                    <div class="combo-item" id="co-esp-box-2">2D Corners</div>
+                                    <div class="combo-item" id="co-esp-box-3">3D</div>
+                                    <div class="combo-item" id="co-esp-box-4">3D Corners</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Skeleton</span><div class="ctrl"><div class="checkbox" id="cb-esp-skeleton"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Weapon</span><div class="ctrl"><div class="checkbox" id="cb-esp-weapon"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Snapline</span><div class="ctrl">
+                            <div class="combo" id="co-esp-snapline">
+                                <span class="text" id="co-esp-snapline-text">Off</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="co-esp-snapline-popup">
+                                    <div class="combo-item selected" id="co-esp-snapline-0">Off</div>
+                                    <div class="combo-item" id="co-esp-snapline-1">Bottom</div>
+                                    <div class="combo-item" id="co-esp-snapline-2">Top</div>
+                                    <div class="combo-item" id="co-esp-snapline-3">Crosshair</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Glow</span><div class="ctrl"><div class="checkbox" id="cb-esp-glow"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Names</span><div class="ctrl"><div class="checkbox" id="cb-esp-name"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Health bar</span><div class="ctrl"><div class="checkbox" id="cb-esp-health"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Distance</span><div class="ctrl"><div class="checkbox" id="cb-esp-distance"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Filters</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Visible only</span><div class="ctrl"><div class="checkbox" id="cb-esp-visible-only"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Show teammates</span><div class="ctrl"><div class="checkbox" id="cb-esp-teammates"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                </section>
+
+                <!-- ===================== VISUALS / CAMERA =================== -->
+                <section class="panel" id="panel-visuals-camera">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Camera</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Third person</span><div class="ctrl"><div class="checkbox" id="cb-third-enabled"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-third">
+                                <span class="text" id="kb-third-text">On</span>
+                                <span class="caret">&#9660;</span>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Distance</span><div class="ctrl"><span class="value" id="val-third-distance">10m</span>
+                            <div class="slider" id="sl-third-distance" data-min="1" data-max="25" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-third-distance"></div><div class="knob" id="knob-third-distance"></div>
+                            </div>
+                        </div></div>
+                    </div>
+                </section>
+
+                <!-- ===================== VISUALS / STATUS =================== -->
+                <section class="panel" id="panel-visuals-status">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Runtime</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Players tracked</span><div class="ctrl"><span class="value" id="val-players">0</span></div></div>
+                        <div class="row"><span class="label">Bots alive</span><div class="ctrl"><span class="value" id="val-bots">0</span></div></div>
+                        <div class="row"><span class="label">ESP drawn</span><div class="ctrl"><span class="value" id="val-drawn">0</span></div></div>
+                        <div class="row"><span class="label">Local ping</span><div class="ctrl"><span class="value" id="val-ping">0 ms</span></div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Aim state</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Current target</span><div class="ctrl"><span class="value" id="val-target">none</span></div></div>
+                        <div class="row"><span class="label">Weapon slot</span><div class="ctrl"><span class="value" id="val-weapon">--</span></div></div>
+                    </div>
+                </section>
+
+                <!-- ======================== MISC / GENERAL ================== -->
+                <section class="panel" id="panel-misc-general">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Game</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Bots</span><div class="ctrl"><span class="value" id="val-bots-general">0</span></div></div>
+                        <div class="row"><span class="label">Spawn bot</span><div class="ctrl"><span class="btn btn-primary" id="btn-spawn-bot">SPAWN</span></div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Interface</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Menu key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-menu">
+                                <span class="text" id="kb-menu-text">Insert</span>
+                                <span class="caret">&#9660;</span>
+                            </div>
+                        </div></div>
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</rml>
