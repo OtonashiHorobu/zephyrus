@@ -211,6 +211,23 @@ class render_interface_gl2 : public Rml::RenderInterface {
     unsigned int main_framebuffer_{};
     bool transform_enabled_{};
 
+    /// State captured by `begin_frame()` and restored by `end_frame()` so
+    /// drawing into a live game frame never disturbs the host's pipeline
+    /// (a bound GLSL program would silently break the fixed-function path).
+    int saved_program_{};
+    int saved_depth_test_{};
+    int saved_depth_mask_{};
+    int saved_cull_face_{};
+    int saved_active_texture_{};
+    int saved_texture_2d_{};
+    int saved_vertex_array_{};
+    int saved_blend_{};
+    int saved_blend_src_{};
+    int saved_blend_dst_{};
+    int saved_stencil_{};
+    int saved_scissor_{};
+    bool state_saved_{};
+
     std::vector<std::unique_ptr<layer_entry>> layers_;
     std::vector<layer_entry *> layer_stack_;
     std::vector<layer_entry *> free_layers_;

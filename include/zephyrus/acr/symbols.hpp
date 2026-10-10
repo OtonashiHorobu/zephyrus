@@ -13,9 +13,19 @@ inline constexpr std::string_view mousemove{"_Z9mousemoveii"};
 inline constexpr std::string_view inputgrab{"_Z9inputgrabb"};
 inline constexpr std::string_view shoot{"_Z5shootP9playerentR3vec"};
 inline constexpr std::string_view sendshoot{"_ZN6weapon9sendshootERK3vec"};
+inline constexpr std::string_view sendposition{"_Z12sendpositionP9playerent"};
+inline constexpr std::string_view moveplayer{"_Z10moveplayerP7physentib"};
+inline constexpr std::string_view moveplayer_step{"_Z10moveplayerP7physentibi"};
+inline constexpr std::string_view addshotline{
+    "_Z11addshotlineP9playerent3vecRKS1_i"};
 
 // Game functions used through dlsym.
 inline constexpr std::string_view raycubelos{"_Z10raycubelosRK3vecS1_f"};
+inline constexpr std::string_view raycube{"_Z7raycubeRK3vecS1_RS_"};
+inline constexpr std::string_view entinmap{"_Z8entinmapP7physent"};
+inline constexpr std::string_view addmsg{"_Z6addmsgiPKcz"};
+inline constexpr std::string_view c2sinfo{"_Z7c2sinfob"};
+inline constexpr std::string_view vecfromyawpitch{"_Z15vecfromyawpitchffiiR3vec"};
 inline constexpr std::string_view world_to_screen{
     "_Z13worldtoscreenRK3vecR4vec2i"};
 inline constexpr std::string_view draw_text{"_Z9draw_textPKciiiiiiii"};
@@ -41,4 +51,6 @@ inline constexpr std::string_view effective_damage{
 inline constexpr std::string_view lastmillis{"lastmillis"};
 inline constexpr std::string_view setscope{"_Z8setscopeb"};
 inline constexpr std::string_view matrixstack{"_ZN9vertmodel11matrixstackE"};
+inline constexpr std::string_view worldhitpos{"worldhitpos"};
+inline constexpr std::string_view gametype{"gametype"};
 } // namespace zephyrus::acr::symbols

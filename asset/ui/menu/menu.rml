@@ -586,6 +586,120 @@
             color: #0b1220;
         }
 
+        /* Config name field (Osiris/OAE style). */
+        input.field, .field
+        {
+            width: 170dp;
+            height: 24dp;
+            padding-left: 8dp;
+            padding-right: 8dp;
+            background: #101010;
+            border-width: 1dp;
+            border-color: #333333;
+            border-radius: 5dp;
+            color: #e8e8e8;
+            font-size: 12dp;
+            caret-color: #3c9dff;
+        }
+        input.field:hover, .field:hover
+        {
+            border-color: #3c9dff;
+        }
+
+        /* Config tab: a bordered card with two columns (OsirisAndExtra). */
+        .config-card
+        {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            gap: 24dp;
+            margin: 0dp 12dp;
+            padding: 12dp;
+            background: #131313;
+            border-width: 1dp;
+            border-color: #262626;
+            border-radius: 6dp;
+        }
+        .config-col
+        {
+            display: flex;
+            flex-direction: column;
+            gap: 8dp;
+        }
+        .config-col-left
+        {
+            flex: 1;
+        }
+        .config-col-right
+        {
+            width: 220dp;
+            flex-shrink: 0;
+        }
+        .config-heading
+        {
+            color: #5c5c5c;
+            font-size: 11dp;
+            letter-spacing: 0.1em;
+        }
+        input.config-name
+        {
+            width: auto;
+            height: 24dp;
+            padding: 0dp 8dp;
+            line-height: 24dp;
+        }
+        .config-btn
+        {
+            width: 100%;
+            height: 26dp;
+            padding: 0dp;
+            line-height: 26dp;
+            text-align: center;
+        }
+        .config-btn-row
+        {
+            display: flex;
+            flex-direction: row;
+            gap: 8dp;
+        }
+        .config-btn-row .config-btn
+        {
+            width: auto;
+            flex: 1;
+        }
+        .config-list
+        {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 116dp;
+            overflow: hidden;
+            background: #0e0e0e;
+            border-width: 1dp;
+            border-color: #2e2e2e;
+            border-radius: 5dp;
+            padding: 3dp;
+        }
+        .config-item
+        {
+            flex-shrink: 0;
+            height: 24dp;
+            line-height: 24dp;
+            padding: 0dp 8dp;
+            color: #9a9a9a;
+            font-size: 12dp;
+        }
+        .config-item:hover
+        {
+            background: #1b1b1b;
+            color: #e8e8e8;
+        }
+        .config-item.selected
+        {
+            background: #22354a;
+            color: #e8e8e8;
+        }
+
         /* --------------------------- panels ----------------------------- */
 
         .panel
@@ -638,18 +752,19 @@
 
 <body>
 <div id="menu">
-    <div id="resize-handle"><span class="grip">&#9698;</span></div>
     <div id="menu-header">
         <div id="wordmark">[<span class="mark">zephyrus</span><span id="caret"></span>]</div>
         <div id="tabs">
             <div class="tab active" id="tab-aim"><span>AIM</span></div>
             <div class="tab" id="tab-visuals"><span>VISUALS</span></div>
+            <div class="tab" id="tab-exploits"><span>EXPLOITS</span></div>
             <div class="tab" id="tab-misc"><span>MISC</span></div>
         </div>
         <div id="header-meta">
             <span id="fps-label">-- FPS</span>
         </div>
     </div>
+    <div id="resize-handle"><span class="grip">&#8599;</span></div>
 
     <div id="menu-main">
         <div id="sidebar">
@@ -660,6 +775,10 @@
             <div class="nav-item group-visuals" id="nav-visuals-camera"><span class="glyph">&#9679;</span><span>Camera</span></div>
             <div class="nav-item group-visuals" id="nav-visuals-status"><span class="glyph">&#9679;</span><span>Status</span></div>
             <div class="nav-item active group-misc" id="nav-misc-general"><span class="glyph">&#9679;</span><span>General</span></div>
+            <div class="nav-item group-exploits" id="nav-exp-movement"><span class="glyph">&#9679;</span><span>Movement</span></div>
+            <div class="nav-item group-exploits" id="nav-exp-teleport"><span class="glyph">&#9679;</span><span>Teleport</span></div>
+            <div class="nav-item group-exploits" id="nav-exp-actions"><span class="glyph">&#9679;</span><span>Actions</span></div>
+            <div class="nav-item group-exploits" id="nav-exp-packets"><span class="glyph">&#9679;</span><span>Packets</span></div>
         </div>
 
         <div id="content">
@@ -718,6 +837,13 @@
                         <div class="row"><span class="label">Auto fire</span><div class="ctrl"><div class="checkbox" id="cb-aim-autofire"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">No recoil</span><div class="ctrl"><div class="checkbox" id="cb-aim-norecoil"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">Auto scope</span><div class="ctrl"><div class="checkbox" id="cb-aim-autoscope"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Skip protected</span><div class="ctrl"><div class="checkbox" id="cb-aim-skip-prot"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Magnet all</span><div class="ctrl"><div class="checkbox" id="cb-aim-magnet-all"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Magnet strength</span><div class="ctrl"><span class="value" id="val-aim-magnet">1.95</span>
+                            <div class="slider" id="sl-aim-magnet" data-min="0" data-max="1.95" data-decimals="2">
+                                <div class="track"></div><div class="fill" id="fill-aim-magnet"></div><div class="knob" id="knob-aim-magnet"></div>
+                            </div>
+                        </div></div>
                     </div>
                     <div class="section">
                         <div class="section-title"><span>[</span><span class="idx">03</span><span>]</span><span>Targeting</span><span class="rule"></span></div>
@@ -849,6 +975,17 @@
                         <div class="row"><span class="label">Visible only</span><div class="ctrl"><div class="checkbox" id="cb-esp-visible-only"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">Show teammates</span><div class="ctrl"><div class="checkbox" id="cb-esp-teammates"><span class="mark">&#10003;</span></div></div></div>
                     </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">03</span><span>]</span><span>Indicators</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Spawn protection</span><div class="ctrl"><div class="checkbox" id="cb-esp-spawnprot"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Shot tracers</span><div class="ctrl"><div class="checkbox" id="cb-esp-tracers"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Own tracers</span><div class="ctrl"><div class="checkbox" id="cb-esp-tracer-own"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Tracer fade</span><div class="ctrl"><span class="value" id="val-esp-tracer-time">1.5s</span>
+                            <div class="slider" id="sl-esp-tracer-time" data-min="0.2" data-max="5" data-decimals="1">
+                                <div class="track"></div><div class="fill" id="fill-esp-tracer-time"></div><div class="knob" id="knob-esp-tracer-time"></div>
+                            </div>
+                        </div></div>
+                    </div>
                 </section>
 
                 <!-- ===================== VISUALS / CAMERA =================== -->
@@ -901,6 +1038,180 @@
                                 <span class="caret">&#9660;</span>
                             </div>
                         </div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">03</span><span>]</span><span>Config</span><span class="rule"></span></div>
+                        <div class="config-card">
+                            <div class="config-col config-col-left">
+                                <div class="config-heading">PROFILES</div>
+                                <div class="config-list" id="config-list"></div>
+                                <div class="config-heading">CONFIG NAME</div>
+                                <input class="field config-name" id="in-config-name" type="text" value="default" size="16"/>
+                            </div>
+                            <div class="config-col config-col-right">
+                                <div class="config-heading">ACTIONS</div>
+                                <div class="btn btn-primary config-btn" id="btn-config-save">CREATE / SAVE</div>
+                                <div class="btn config-btn" id="btn-config-load">LOAD SELECTED</div>
+                                <div class="btn config-btn" id="btn-config-delete">DELETE SELECTED</div>
+                                <div class="btn config-btn" id="btn-config-reset">RESET DEFAULTS</div>
+                                <div class="btn config-btn" id="btn-config-folder">OPEN CONFIG FOLDER</div>
+                                <div class="config-btn-row">
+                                    <div class="btn config-btn" id="btn-config-export">EXPORT</div>
+                                    <div class="btn config-btn" id="btn-config-import">IMPORT</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ==================== EXPLOITS / MOVEMENT ================= -->
+                <section class="panel" id="panel-exp-movement">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Movement</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-mov">
+                                <span class="text" id="kb-mov-text">Off</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-mov-popup">
+                                    <div class="combo-item" id="kb-mov-off">Off</div>
+                                    <div class="combo-item" id="kb-mov-always">Always</div>
+                                    <div class="combo-item" id="kb-mov-hold">Hold</div>
+                                    <div class="combo-item" id="kb-mov-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-mov-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Speedhack</span><div class="ctrl"><div class="checkbox" id="cb-mov-speedhack"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Speed multiplier</span><div class="ctrl"><span class="value" id="val-mov-speed">1.50x</span>
+                            <div class="slider" id="sl-mov-speed" data-min="1" data-max="3" data-decimals="2">
+                                <div class="track"></div><div class="fill" id="fill-mov-speed"></div><div class="knob" id="knob-mov-speed"></div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Auto bhop</span><div class="ctrl"><div class="checkbox" id="cb-mov-bhop"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Bhop needs jump</span><div class="ctrl"><div class="checkbox" id="cb-mov-bhop-hold"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Air control</span><div class="ctrl"><div class="checkbox" id="cb-mov-air"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Air brake</span><div class="ctrl"><div class="checkbox" id="cb-mov-air-stop"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Air speed floor</span><div class="ctrl"><div class="checkbox" id="cb-mov-air-boost"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                </section>
+
+                <!-- ==================== EXPLOITS / TELEPORT ================= -->
+                <section class="panel" id="panel-exp-teleport">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Blink</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Forward</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-tp-forward">
+                                <span class="text" id="kb-tp-forward-text">Unbound</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-tp-forward-popup">
+                                    <div class="combo-item" id="kb-tp-forward-off">Off</div>
+                                    <div class="combo-item" id="kb-tp-forward-always">Always</div>
+                                    <div class="combo-item" id="kb-tp-forward-hold">Hold</div>
+                                    <div class="combo-item" id="kb-tp-forward-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-tp-forward-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Forward button</span><div class="ctrl"><div class="btn" id="btn-tp-forward">BLINK</div></div></div>
+                        <div class="row"><span class="label">To crosshair</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-tp-crosshair">
+                                <span class="text" id="kb-tp-crosshair-text">Unbound</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-tp-crosshair-popup">
+                                    <div class="combo-item" id="kb-tp-crosshair-off">Off</div>
+                                    <div class="combo-item" id="kb-tp-crosshair-always">Always</div>
+                                    <div class="combo-item" id="kb-tp-crosshair-hold">Hold</div>
+                                    <div class="combo-item" id="kb-tp-crosshair-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-tp-crosshair-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Crosshair button</span><div class="ctrl"><div class="btn" id="btn-tp-crosshair">BLINK</div></div></div>
+                        <div class="row"><span class="label">Behind target</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-tp-target">
+                                <span class="text" id="kb-tp-target-text">Unbound</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-tp-target-popup">
+                                    <div class="combo-item" id="kb-tp-target-off">Off</div>
+                                    <div class="combo-item" id="kb-tp-target-always">Always</div>
+                                    <div class="combo-item" id="kb-tp-target-hold">Hold</div>
+                                    <div class="combo-item" id="kb-tp-target-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-tp-target-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Behind button</span><div class="ctrl"><div class="btn" id="btn-tp-target">BLINK</div></div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Options</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Distance</span><div class="ctrl"><span class="value" id="val-tp-distance">12m</span>
+                            <div class="slider" id="sl-tp-distance" data-min="1" data-max="64" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-tp-distance"></div><div class="knob" id="knob-tp-distance"></div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Blink fade</span><div class="ctrl"><div class="checkbox" id="cb-tp-fade"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Keep momentum</span><div class="ctrl"><div class="checkbox" id="cb-tp-velocity"><span class="mark">&#10003;</span></div></div></div>
+                    </div>
+                </section>
+
+                <!-- ==================== EXPLOITS / ACTIONS ================== -->
+                <section class="panel" id="panel-exp-actions">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Throwing knife</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-exp-knife">
+                                <span class="text" id="kb-exp-knife-text">Unbound</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-exp-knife-popup">
+                                    <div class="combo-item" id="kb-exp-knife-off">Off</div>
+                                    <div class="combo-item" id="kb-exp-knife-always">Always</div>
+                                    <div class="combo-item" id="kb-exp-knife-hold">Hold</div>
+                                    <div class="combo-item" id="kb-exp-knife-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-exp-knife-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Trigger</span><div class="ctrl"><div class="btn btn-primary" id="btn-exp-knife">KNIFE</div></div></div>
+                        <div class="row"><span class="label">Recycle drop</span><div class="ctrl"><div class="checkbox" id="cb-exp-knife-recycle"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Spacing</span><div class="ctrl"><span class="value" id="val-exp-knife-spacing">600ms</span>
+                            <div class="slider" id="sl-exp-knife-spacing" data-min="300" data-max="2000" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-exp-knife-spacing"></div><div class="knob" id="knob-exp-knife-spacing"></div>
+                            </div>
+                        </div></div>
+                    </div>
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">02</span><span>]</span><span>Grenade</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Key</span><div class="ctrl">
+                            <div class="combo keybind" id="kb-exp-nade">
+                                <span class="text" id="kb-exp-nade-text">Unbound</span>
+                                <span class="caret">&#9660;</span>
+                                <div class="combo-popup" id="kb-exp-nade-popup">
+                                    <div class="combo-item" id="kb-exp-nade-off">Off</div>
+                                    <div class="combo-item" id="kb-exp-nade-always">Always</div>
+                                    <div class="combo-item" id="kb-exp-nade-hold">Hold</div>
+                                    <div class="combo-item" id="kb-exp-nade-toggle">Toggle</div>
+                                    <div class="combo-item" id="kb-exp-nade-unset">Unset</div>
+                                </div>
+                            </div>
+                        </div></div>
+                        <div class="row"><span class="label">Trigger</span><div class="ctrl"><div class="btn btn-primary" id="btn-exp-nade">GRENADE</div></div></div>
+                        <div class="row"><span class="label">At crosshair</span><div class="ctrl"><div class="checkbox" id="cb-exp-nade-crosshair"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Spacing</span><div class="ctrl"><span class="value" id="val-exp-nade-spacing">1100ms</span>
+                            <div class="slider" id="sl-exp-nade-spacing" data-min="600" data-max="3000" data-decimals="0">
+                                <div class="track"></div><div class="fill" id="fill-exp-nade-spacing"></div><div class="knob" id="knob-exp-nade-spacing"></div>
+                            </div>
+                        </div></div>
+                    </div>
+                </section>
+
+                <!-- ==================== EXPLOITS / PACKETS ================== -->
+                <section class="panel" id="panel-exp-packets">
+                    <div class="section">
+                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Position packet</span><span class="rule"></span></div>
+                        <div class="row"><span class="label">Always scoped</span><div class="ctrl"><div class="checkbox" id="cb-pkt-scope"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Always crouched</span><div class="ctrl"><div class="checkbox" id="cb-pkt-crouch"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Zero velocity</span><div class="ctrl"><div class="checkbox" id="cb-pkt-velocity"><span class="mark">&#10003;</span></div></div></div>
+                        <div class="row"><span class="label">Always on floor</span><div class="ctrl"><div class="checkbox" id="cb-pkt-onfloor"><span class="mark">&#10003;</span></div></div></div>
                     </div>
                 </section>
 

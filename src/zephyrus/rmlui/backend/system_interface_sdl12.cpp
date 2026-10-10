@@ -265,6 +265,23 @@ void system_interface_sdl12::GetClipboardText(Rml::String &text) {
     }
 }
 
+void system_interface_sdl12::SetClipboard(const std::string_view &text) {
+    if (const clipboard_api &api{clipboard()}; api.available) {
+        api.set_text(std::string{text}.c_str());
+    }
+}
+
+Rml::String system_interface_sdl12::GetClipboard() {
+    Rml::String text;
+    if (const clipboard_api &api{clipboard()}; api.available) {
+        if (char *value{api.get_text()}; value != nullptr) {
+            text = value;
+            api.free_text(value);
+        }
+    }
+    return text;
+}
+
 void system_interface_sdl12::ActivateKeyboard(Rml::Vector2f /*caret_position*/,
                                               float /*line_height*/) {
     if (const sdl::api *api{sdl::get()}; api != nullptr) {

@@ -46,19 +46,42 @@ struct keybind {
         if (!matches(code)) {
             return false;
         }
+        const bool was_down{key_down};
         key_down = isdown;
+        if (isdown && !was_down) {
+            pressed = true;
+        }
         if (mode == keybind_mode::toggle && isdown) {
             toggled = !toggled;
         }
         return true;
     }
 
+    /// True exactly once after every fresh press (edge).
+    [[nodiscard]] bool consume_pressed() noexcept {
+        const bool value{pressed};
+        pressed = false;
+        return value;
+    }
+
     void reset() noexcept {
         key_down = false;
         toggled = false;
+        pressed = false;
     }
+
+    bool pressed{};
 };
 
 /// Human readable name for an SDL 1.2 key symbol (e.g. "INSERT").
 [[nodiscard]] std::string_view key_name(int key) noexcept;
+
+/// Reverse of `key_name`; returns 0 for unknown names.
+[[nodiscard]] int key_from_name(std::string_view name) noexcept;
+
+/// Stable config-file spelling of a bind mode.
+[[nodiscard]] std::string_view keybind_mode_name(keybind_mode mode) noexcept;
+
+/// Parse a bind mode; anything unknown becomes `always`.
+[[nodiscard]] keybind_mode keybind_mode_from_name(std::string_view name) noexcept;
 } // namespace zephyrus

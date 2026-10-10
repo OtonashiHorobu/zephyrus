@@ -32,6 +32,7 @@ class ZephyrusConan(ConanFile):
         self.requires("rmlui/6.2")
         self.requires("cmrc/2.0.1")
         self.requires("zydis/4.1.1")
+        self.requires("tomlplusplus/3.4.0")
 
     def configure(self):
         # Share one fmt instance between zephyrus and spdlog.

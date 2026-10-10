@@ -21,29 +21,69 @@ inline constexpr std::size_t vec_z = 8;
 // struct physent (first member is the vptr from its virtual destructor)
 inline constexpr std::size_t physent_o = 8;
 inline constexpr std::size_t physent_vel = 20;
+inline constexpr std::size_t physent_vel_t = 32;
+inline constexpr std::size_t physent_deltapos = 44;
+inline constexpr std::size_t physent_newpos = 56;
 inline constexpr std::size_t physent_yaw = 68;
 inline constexpr std::size_t physent_pitch = 72;
 inline constexpr std::size_t physent_roll = 76;
 inline constexpr std::size_t physent_pitchvel = 80;
 inline constexpr std::size_t physent_yawvel = 84;
+inline constexpr std::size_t physent_maxspeed = 88;
+inline constexpr std::size_t physent_timeinair = 92;
 inline constexpr std::size_t physent_radius = 96;
 inline constexpr std::size_t physent_eyeheight = 100;
 inline constexpr std::size_t physent_maxeyeheight = 104;
 inline constexpr std::size_t physent_aboveeye = 108;
+inline constexpr std::size_t physent_inwater = 112;
 inline constexpr std::size_t physent_onfloor = 113;
+inline constexpr std::size_t physent_onladder = 114;
+inline constexpr std::size_t physent_jumpnext = 115;
 inline constexpr std::size_t physent_crouching = 116;
+inline constexpr std::size_t physent_crouchedinair = 117;
+inline constexpr std::size_t physent_trycrouch = 118;
+inline constexpr std::size_t physent_sprinting = 119;
+inline constexpr std::size_t physent_cancollide = 120;
+inline constexpr std::size_t physent_stuck = 121;
+inline constexpr std::size_t physent_shoot = 122;
+inline constexpr std::size_t physent_lastjump = 124;
+inline constexpr std::size_t physent_lastjumpheight = 128;
 inline constexpr std::size_t physent_move = 136;
 inline constexpr std::size_t physent_strafe = 137;
 inline constexpr std::size_t physent_state = 138;
 inline constexpr std::size_t physent_type = 139;
+inline constexpr std::size_t physent_eyeheightvel = 140;
 
 // class playerent : public dynent, public playerstate
 inline constexpr std::size_t playerent_health = 280;
 inline constexpr std::size_t playerent_armour = 284;
 inline constexpr std::size_t playerent_playerstate = 272;
+// playerstate field offsets are relative to the playerstate base (272); the
+// class starts with a vptr followed by health, armour, lastspawn, lastregen.
+inline constexpr std::size_t playerstate_lastspawn = 16;
+inline constexpr std::size_t playerstate_lastregen = 20;
+inline constexpr std::size_t playerstate_primary = 24;
+inline constexpr std::size_t playerstate_secondary = 28;
+inline constexpr std::size_t playerstate_perk1 = 32;
 inline constexpr std::size_t playerstate_perk2 = 36;
+inline constexpr std::size_t playerstate_nextprimary = 40;
+inline constexpr std::size_t playerstate_nextsecondary = 44;
+inline constexpr std::size_t playerstate_nextperk1 = 48;
+inline constexpr std::size_t playerstate_nextperk2 = 52;
 inline constexpr std::size_t playerstate_gunselect = 56;
+inline constexpr std::size_t playerstate_akimbo = 60;
 inline constexpr std::size_t playerstate_scoping = 61;
+inline constexpr std::size_t playerstate_ammo = 64;
+inline constexpr std::size_t playerstate_mag = 140;
+inline constexpr std::size_t playerstate_gunwait = 216;
+inline constexpr std::size_t playerent_lastspawn =
+    playerent_playerstate + playerstate_lastspawn;
+inline constexpr std::size_t playerent_ammo =
+    playerent_playerstate + playerstate_ammo;
+inline constexpr std::size_t playerent_mag =
+    playerent_playerstate + playerstate_mag;
+inline constexpr std::size_t playerent_gunwait =
+    playerent_playerstate + playerstate_gunwait;
 inline constexpr std::size_t playerent_zoomed = 148;
 inline constexpr std::size_t playerent_clientnum = 728;
 inline constexpr std::size_t playerent_lastupdate = 732;

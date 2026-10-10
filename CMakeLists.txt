@@ -71,6 +71,7 @@ setup_dependencies()
 # symbols are resolved from the instance already loaded by the host game, so
 # the overlay shares the exact same SDL state (event queue, video, cursor).
 find_path(ZEPHYRUS_SDL_INCLUDE_DIR "SDL/SDL.h" REQUIRED)
+find_path(ZEPHYRUS_SDL2_INCLUDE_DIR "SDL2/SDL.h" REQUIRED)
 
 add_subdirectory(asset)
 add_subdirectory(test)
@@ -81,25 +82,20 @@ include_directories(
 )
 
 
+# Shared core: everything that is game-agnostic (hook engine, config, RmlUi
+# runtime, logging, version). Game modules link this and never the other way
+# around.
 add_library(zephyrus-core STATIC
-    src/zephyrus/acr/game.cpp
-    src/zephyrus/features/esp.cpp
-    src/zephyrus/features/rage.cpp
-    src/zephyrus/features/skeleton.cpp
-    src/zephyrus/features/thirdperson.cpp
+    src/zephyrus/config/config.cpp
     src/zephyrus/hook/inline_hook.cpp
     src/zephyrus/hook/pattern.cpp
+    src/zephyrus/hook/pointer_slot.cpp
     src/zephyrus/hook/resolve.cpp
     src/zephyrus/input/keybind.cpp
     src/zephyrus/log/logging_manager.cpp
-    src/zephyrus/overlay/menu.cpp
-    src/zephyrus/overlay/overlay.cpp
-    src/zephyrus/rmlui/backend/backend_sdl12_gl2.cpp
     src/zephyrus/rmlui/backend/render_interface_gl2.cpp
-    src/zephyrus/rmlui/backend/system_interface_sdl12.cpp
     src/zephyrus/rmlui/cmrc_file_interface.cpp
     src/zephyrus/rmlui/rmlui_manager.cpp
-    src/zephyrus/sdl/sdl.cpp
     src/zephyrus/version.cpp
     src/zephyrus/zephyrus.cpp
     "${PROJECT_BINARY_DIR}/version.cpp"
@@ -113,6 +109,7 @@ target_link_libraries(zephyrus-core PUBLIC
     boost-ext-di::boost-ext-di
     OpenGL::GL
     Zydis::Zydis
+    tomlplusplus::tomlplusplus
     ${CMAKE_DL_LIBS}
 )
 target_include_directories(zephyrus-core PUBLIC
@@ -120,8 +117,31 @@ target_include_directories(zephyrus-core PUBLIC
 )
 target_compile_options(zephyrus-core PRIVATE -Werror)
 
+# ACR game module: game bindings, features and overlay/menu, plus the SDL 1.2
+# function table / backend that ACR needs.
+add_library(zephyrus-acr-core STATIC
+    src/zephyrus/acr/game.cpp
+    src/zephyrus/features/acr/esp.cpp
+    src/zephyrus/features/acr/exploits.cpp
+    src/zephyrus/features/acr/movement.cpp
+    src/zephyrus/features/acr/rage.cpp
+    src/zephyrus/features/acr/skeleton.cpp
+    src/zephyrus/features/acr/thirdperson.cpp
+    src/zephyrus/overlay/acr/menu.cpp
+    src/zephyrus/overlay/acr/overlay.cpp
+    src/zephyrus/rmlui/backend/backend_sdl12_gl2.cpp
+    src/zephyrus/rmlui/backend/system_interface_sdl12.cpp
+    src/zephyrus/sdl/sdl.cpp
+)
+add_library(Zephyrus::ACRCore ALIAS zephyrus-acr-core)
+target_link_libraries(zephyrus-acr-core PUBLIC Zephyrus::Core)
+target_compile_options(zephyrus-acr-core PRIVATE -Werror)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_options(zephyrus-acr-core PRIVATE -fvisibility=hidden)
+endif()
+
 add_executable(zephyrus-standalone src/zephyrus_standalone.cpp)
-target_link_libraries(zephyrus-standalone PRIVATE Zephyrus::Core)
+target_link_libraries(zephyrus-standalone PRIVATE Zephyrus::ACRCore)
 target_compile_options(zephyrus-standalone PRIVATE -Werror)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # Standalone owns its process, so the static C++ runtime is safe here.
@@ -131,7 +151,7 @@ endif()
 
 add_library(zephyrus-acr SHARED src/zephyrus_acr.cpp)
 add_library(Zephyrus::ACR ALIAS zephyrus-acr)
-target_link_libraries(zephyrus-acr PRIVATE Zephyrus::Core)
+target_link_libraries(zephyrus-acr PRIVATE Zephyrus::ACRCore)
 target_compile_options(zephyrus-acr PRIVATE -Werror)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # The injected library is dlopen()ed into a C++ process (ACR) that already
@@ -142,6 +162,67 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_options(zephyrus-acr PRIVATE
         -Wl,--exclude-libs,ALL
         "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/zephyrus-acr.map")
+endif()
+
+# CS:GO game module: Source SDK bindings and (in later phases) features and
+# overlay. Links only the shared core; it must never depend on ACR.
+add_library(zephyrus-csgo-core STATIC
+    src/zephyrus/csgo/game.cpp
+    src/zephyrus/csgo/hooks/client_mode_hooks.cpp
+    src/zephyrus/csgo/interfaces.cpp
+    src/zephyrus/csgo/netvars.cpp
+    src/zephyrus/csgo/patterns.cpp
+    src/zephyrus/features/csgo/animations.cpp
+    src/zephyrus/features/csgo/anti_aim.cpp
+    src/zephyrus/features/csgo/autowall.cpp
+    src/zephyrus/features/csgo/backtrack.cpp
+    src/zephyrus/features/csgo/esp.cpp
+    src/zephyrus/features/csgo/fake_lag.cpp
+    src/zephyrus/features/csgo/glow.cpp
+    src/zephyrus/features/csgo/hitchance.cpp
+    src/zephyrus/features/csgo/movement.cpp
+    src/zephyrus/features/csgo/prediction.cpp
+    src/zephyrus/features/csgo/rage.cpp
+    src/zephyrus/features/csgo/resolver.cpp
+    src/zephyrus/features/csgo/visuals.cpp
+    src/zephyrus/overlay/csgo/menu.cpp
+    src/zephyrus/overlay/csgo/overlay.cpp
+    src/zephyrus/rmlui/backend/system_interface_sdl2.cpp
+    src/zephyrus/sdl2/sdl2.cpp
+)
+add_library(Zephyrus::CSGOCore ALIAS zephyrus-csgo-core)
+target_link_libraries(zephyrus-csgo-core PUBLIC Zephyrus::Core)
+target_include_directories(zephyrus-csgo-core PUBLIC
+    "${ZEPHYRUS_SDL2_INCLUDE_DIR}"
+)
+target_compile_options(zephyrus-csgo-core PRIVATE -Werror)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_compile_options(zephyrus-csgo-core PRIVATE -fvisibility=hidden)
+endif()
+
+add_library(zephyrus-csgo SHARED
+    src/zephyrus_csgo.cpp
+    # The per-game backend defines the Backend:: symbols the shared core
+    # references; kept in the shared target so static link order cannot drop
+    # it before libzephyrus-core.a is scanned.
+    src/zephyrus/rmlui/backend/backend_sdl2_gl3.cpp
+    # Official RmlUi GL3 renderer (MIT): shader based, restores the host's GL
+    # state around every frame. Third-party code, so not subject to -Werror.
+    src/zephyrus/rmlui/backend/render_interface_gl3.cpp
+)
+set_source_files_properties(src/zephyrus/rmlui/backend/render_interface_gl3.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-error"
+    COMPILE_DEFINITIONS "RMLUI_NUM_MSAA_SAMPLES=1")
+add_library(Zephyrus::CSGO ALIAS zephyrus-csgo)
+target_link_libraries(zephyrus-csgo PRIVATE Zephyrus::CSGOCore)
+target_compile_options(zephyrus-csgo PRIVATE -Werror)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # Same rationale as zephyrus-acr: the host process already has libstdc++
+    # and must neither get a second copy nor have its symbols interposed.
+    target_compile_options(zephyrus-csgo PRIVATE -fvisibility=hidden)
+    target_link_options(zephyrus-csgo PRIVATE
+        -Wl,--exclude-libs,ALL
+        "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/cmake/zephyrus-csgo.map")
 endif()
 
 file(GLOB_RECURSE TEST_SRCS test/*.cpp)

@@ -5,7 +5,7 @@
 #include <zephyrus/asset/ui.hpp>
 #include <zephyrus/hook/hook.hpp>
 #include <zephyrus/log.hpp>
-#include <zephyrus/overlay/overlay.hpp>
+#include <zephyrus/overlay/acr/overlay.hpp>
 #include <zephyrus/platform/detection.hpp>
 #include <zephyrus/sdl/sdl.hpp>
 #include <zephyrus/zephyrus.hpp>
@@ -164,6 +164,42 @@ extern "C" __attribute__((visibility("default"))) void
 zephyrus_acr_add_bots(int count) noexcept {
     if (overlay != nullptr) {
         overlay->request_bots(count);
+    }
+}
+
+/// Test/automation hooks for the exploit actions (manual testing).
+extern "C" __attribute__((visibility("default"))) void
+zephyrus_acr_knife() noexcept {
+    if (overlay != nullptr) {
+        overlay->exploits().trigger_knife();
+    }
+}
+
+extern "C" __attribute__((visibility("default"))) void
+zephyrus_acr_nade() noexcept {
+    if (overlay != nullptr) {
+        overlay->exploits().trigger_nade();
+    }
+}
+
+extern "C" __attribute__((visibility("default"))) void
+zephyrus_acr_blink(int mode) noexcept {
+    if (overlay != nullptr) {
+        overlay->exploits().trigger_blink(mode);
+    }
+}
+
+/// Enable/disable the movement master switch without touching the menu.
+extern "C" __attribute__((visibility("default"))) void
+zephyrus_acr_set_movement(int enabled) noexcept {
+    if (overlay != nullptr) {
+        auto &key{overlay->movement().toggle_key};
+        key.mode = zephyrus::keybind_mode::always;
+        key.key = 0;
+        key.toggled = enabled != 0;
+        if (enabled == 0) {
+            key.mode = zephyrus::keybind_mode::off;
+        }
     }
 }
 

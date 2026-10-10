@@ -4,6 +4,7 @@
 
 #include <zephyrus/acr/game.hpp>
 #include <zephyrus/acr/offsets.hpp>
+#include <zephyrus/acr/protocol.hpp>
 #include <zephyrus/acr/symbols.hpp>
 #include <zephyrus/hook/hook.hpp>
 #include <zephyrus/log.hpp>
@@ -58,6 +59,19 @@ std::expected<game, std::string> game::create() noexcept {
     ok &= resolve_pointer(result.draw_text_, symbols::draw_text);
     ok &= resolve_pointer(result.add_bot_, symbols::add_bot);
     ok &= resolve_pointer(result.bot_count_, symbols::bot_count);
+
+    ok &= resolve_pointer(result.raycube_, symbols::raycube);
+    ok &= resolve_pointer(result.entinmap_, symbols::entinmap);
+    ok &= resolve_pointer(result.sendposition_, symbols::sendposition);
+    ok &= resolve_pointer(result.addmsg_, symbols::addmsg);
+    ok &= resolve_pointer(result.c2sinfo_, symbols::c2sinfo);
+    ok &= resolve_pointer(result.vecfromyawpitch_, symbols::vecfromyawpitch);
+
+    ok &= resolve_pointer(result.gamemode_, symbols::gamemode);
+    ok &= resolve_pointer(result.mutators_, symbols::mutators);
+    ok &= resolve_pointer(result.lastmillis_, symbols::lastmillis);
+    ok &= resolve_pointer(result.worldhitpos_, symbols::worldhitpos);
+    ok &= resolve_pointer(result.gametype_, symbols::gametype);
 
     if (!ok) {
         return std::unexpected{"failed to resolve one or more ACR symbols"};
@@ -219,5 +233,122 @@ float game::zone_damage(int gun, float distance, int hitzone) const noexcept {
     const float head{muls_[mulset * 2 + 1]};
     damage *= hitzone == 3 ? head : torso;
     return damage;
+}
+
+int game::now() const noexcept {
+    return lastmillis_ != nullptr ? *lastmillis_ : 0;
+}
+
+int game::gamemode() const noexcept {
+    return gamemode_ != nullptr ? *gamemode_ : protocol::g_dm;
+}
+
+int game::mutators() const noexcept {
+    return mutators_ != nullptr ? *mutators_ : 0;
+}
+
+int game::mode_implied() const noexcept {
+    if (gametype_ == nullptr) {
+        return 0;
+    }
+    const int mode{gamemode()};
+    if (mode < 0 || mode >= protocol::g_max) {
+        return 0;
+    }
+    // struct gametypes { int type, implied, mutators[2]; const char *name,
+    // *gsp[1]; }
+    return memory::read<int>(
+        gametype_, static_cast<std::size_t>(mode) *
+                           sizeof(protocol::gametypes_entry) +
+                       offsetof(protocol::gametypes_entry, implied));
+}
+
+int game::spawn_protect_ms() const noexcept {
+    const int combined{mutators() | mode_implied()};
+    if (combined & protocol::g_m_classic) {
+        return protocol::spawn_protect_classic;
+    }
+    const int mode{gamemode()};
+    if (mode >= 0 && mode < protocol::g_max &&
+        ((1 << mode) & protocol::flag_modes_mask) != 0) {
+        return protocol::spawn_protect_flags;
+    }
+    if (combined & protocol::g_m_team) {
+        return protocol::spawn_protect_team;
+    }
+    return protocol::spawn_protect_default;
+}
+
+vec3 game::crosshair_position() const noexcept {
+    if (worldhitpos_ == nullptr) {
+        return {};
+    }
+    return {worldhitpos_[0], worldhitpos_[1], worldhitpos_[2]};
+}
+
+float game::raycube(const vec3 &from, const vec3 &direction,
+                    vec3 *surface) const noexcept {
+    if (raycube_ == nullptr) {
+        return 0.0F;
+    }
+    vec3 scratch{};
+    void *target{surface != nullptr ? static_cast<void *>(surface)
+                                    : static_cast<void *>(&scratch)};
+    return raycube_(from, direction, target);
+}
+
+void game::entinmap(void *physent) const noexcept {
+    if (entinmap_ != nullptr && physent != nullptr) {
+        entinmap_(physent);
+    }
+}
+
+void game::send_position(void *physent) const noexcept {
+    if (sendposition_ != nullptr && physent != nullptr) {
+        sendposition_(physent);
+    }
+}
+
+void game::flush_messages() const noexcept {
+    if (c2sinfo_ != nullptr) {
+        c2sinfo_(true);
+    }
+}
+
+void game::message_weapchange(int cn, int gun) const noexcept {
+    if (addmsg_ != nullptr) {
+        addmsg_(protocol::sv_weapchange, "ri2", cn, gun);
+    }
+}
+
+void game::message_quickswitch(int cn) const noexcept {
+    if (addmsg_ != nullptr) {
+        addmsg_(protocol::sv_quickswitch, "ri", cn);
+    }
+}
+
+void game::message_shootc(int cn, int id, int gun) const noexcept {
+    if (addmsg_ != nullptr) {
+        addmsg_(protocol::sv_shootc, "ri3", cn, id, gun);
+    }
+}
+
+void game::message_explode(int cn, int id, int gun, int flags,
+                           const vec3 &o) const noexcept {
+    if (addmsg_ != nullptr) {
+        constexpr float dmf{16.0F};
+        addmsg_(protocol::sv_explode, "ri7", cn, id, gun, flags,
+                static_cast<int>(o.x * dmf), static_cast<int>(o.y * dmf),
+                static_cast<int>(o.z * dmf));
+    }
+}
+
+void game::vec_from_yaw_pitch(float yaw, int move, int strafe,
+                              vec3 &out) const noexcept {
+    if (vecfromyawpitch_ == nullptr) {
+        out = {};
+        return;
+    }
+    vecfromyawpitch_(yaw, 0.0F, move, strafe, static_cast<void *>(&out));
 }
 } // namespace zephyrus::acr

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+#
+# SPDX-FileCopyrightText: Copyright (c) 2026 Otonashi Horobu
+#
+# Export list for the injected library: only the explicit entry points are
+# visible to the host process; everything else (including libstdc++ template
+# instantiations pulled in from static archives and headers) stays local.
+
+{
+    global:
+        zephyrus_csgo_init;
+        zephyrus_csgo_shutdown;
+        zephyrus_csgo_probe;
+        zephyrus_csgo_toggle_overlay;
+        zephyrus_csgo_set_fov;
+        zephyrus_csgo_set_bhop;
+    local:
+        *;
+};

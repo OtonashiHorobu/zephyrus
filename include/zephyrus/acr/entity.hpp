@@ -11,10 +11,23 @@
 #include <string_view>
 
 namespace zephyrus::acr {
+/// Layout- and ABI-compatible with the game's `vec`.
+///
+/// The game's `vec` is a union of `{float x,y,z;}` and `int i[3]`, so the
+/// System V ABI classifies it as INTEGER: by-value parameters travel in the
+/// integer registers (rsi/rdx/...) instead of SSE. Mirroring the int array
+/// here keeps hooked signatures such as `addshotline(playerent*, vec, ...)`
+/// binary compatible.
 struct vec3 {
-    float x{};
-    float y{};
-    float z{};
+    union {
+        struct {
+            float x;
+            float y;
+            float z;
+        };
+        float v[3];
+        int i[3];
+    };
 };
 
 /// Raw memory access helpers for game objects.
@@ -126,6 +139,118 @@ class player {
     [[nodiscard]] float pitch() const noexcept {
         return memory::read<float>(base_, offsets::physent_pitch);
     }
+    [[nodiscard]] float maxspeed() const noexcept {
+        return memory::read<float>(base_, offsets::physent_maxspeed);
+    }
+    void set_maxspeed(float value) noexcept {
+        memory::write(base_, offsets::physent_maxspeed, value);
+    }
+    [[nodiscard]] bool onfloor() const noexcept {
+        return memory::read<bool>(base_, offsets::physent_onfloor);
+    }
+    void set_onfloor(bool value) noexcept {
+        memory::write(base_, offsets::physent_onfloor, value);
+    }
+    [[nodiscard]] bool jumpnext() const noexcept {
+        return memory::read<bool>(base_, offsets::physent_jumpnext);
+    }
+    void set_jumpnext(bool value) noexcept {
+        memory::write(base_, offsets::physent_jumpnext, value);
+    }
+    [[nodiscard]] char move_input() const noexcept {
+        return memory::read<char>(base_, offsets::physent_move);
+    }
+    [[nodiscard]] char strafe_input() const noexcept {
+        return memory::read<char>(base_, offsets::physent_strafe);
+    }
+    void set_velocity(const vec3 &value) noexcept {
+        memory::write(base_, offsets::physent_vel + offsets::vec_x, value.x);
+        memory::write(base_, offsets::physent_vel + offsets::vec_y, value.y);
+        memory::write(base_, offsets::physent_vel + offsets::vec_z, value.z);
+    }
+    void set_origin(const vec3 &value) noexcept {
+        memory::write(base_, offsets::physent_o + offsets::vec_x, value.x);
+        memory::write(base_, offsets::physent_o + offsets::vec_y, value.y);
+        memory::write(base_, offsets::physent_o + offsets::vec_z, value.z);
+    }
+    /// Reset the interpolation state after a teleport so the smooth move
+    /// predictor does not glide from the old position.
+    void reset_interp() noexcept {
+        const float eye{eyeheight()};
+        memory::write(base_, offsets::physent_deltapos + offsets::vec_x, 0.0F);
+        memory::write(base_, offsets::physent_deltapos + offsets::vec_y, 0.0F);
+        memory::write(base_, offsets::physent_deltapos + offsets::vec_z, 0.0F);
+        memory::write(base_, offsets::physent_newpos + offsets::vec_x,
+                      memory::read<float>(base_,
+                                          offsets::physent_o + offsets::vec_x));
+        memory::write(base_, offsets::physent_newpos + offsets::vec_y,
+                      memory::read<float>(base_,
+                                          offsets::physent_o + offsets::vec_y));
+        memory::write(base_, offsets::physent_newpos + offsets::vec_z,
+                      memory::read<float>(base_,
+                                          offsets::physent_o + offsets::vec_z) -
+                          eye);
+    }
+    void reset_view_kick() noexcept {
+        memory::write(base_, offsets::physent_pitchvel, 0.0F);
+        memory::write(base_, offsets::physent_yawvel, 0.0F);
+    }
+    void set_crouching(bool value) noexcept {
+        memory::write(base_, offsets::physent_crouching, value);
+    }
+    [[nodiscard]] int lastspawn() const noexcept {
+        return memory::read<int>(base_, offsets::playerent_lastspawn);
+    }
+    void set_lastspawn(int value) noexcept {
+        memory::write(base_, offsets::playerent_lastspawn, value);
+    }
+    /// Server-side spawn protection mirror (`playerstate::protect`).
+    [[nodiscard]] int protection_ms(int now, int duration) const noexcept {
+        const int spawn{lastspawn()};
+        const int elapsed{now - spawn};
+        if (spawn != 0 && duration > 0 && elapsed < duration && elapsed >= 0) {
+            return duration - elapsed;
+        }
+        return 0;
+    }
+    [[nodiscard]] int ammo(int gun) const noexcept {
+        return memory::read<int>(base_, offsets::playerent_ammo +
+                                           sizeof(int) *
+                                               static_cast<std::size_t>(gun));
+    }
+    void set_ammo(int gun, int value) noexcept {
+        memory::write(base_, offsets::playerent_ammo +
+                                 sizeof(int) *
+                                     static_cast<std::size_t>(gun),
+                      value);
+    }
+    [[nodiscard]] int magazine(int gun) const noexcept {
+        return memory::read<int>(base_, offsets::playerent_mag +
+                                           sizeof(int) *
+                                               static_cast<std::size_t>(gun));
+    }
+    void set_magazine(int gun, int value) noexcept {
+        memory::write(base_, offsets::playerent_mag +
+                                 sizeof(int) *
+                                     static_cast<std::size_t>(gun),
+                      value);
+    }
+    [[nodiscard]] int gunwait(int gun) const noexcept {
+        return memory::read<int>(
+            base_, offsets::playerent_gunwait +
+                       sizeof(int) * static_cast<std::size_t>(gun));
+    }
+    void set_scoping(bool value) noexcept {
+        memory::write(base_,
+                      offsets::playerstate_scoping + offsets::playerent_playerstate,
+                      value);
+    }
+    void set_gunselect(int gun) noexcept {
+        memory::write(base_,
+                      offsets::playerstate_gunselect +
+                          offsets::playerent_playerstate,
+                      gun);
+    }
 
     [[nodiscard]] int health() const noexcept {
         return memory::read<int>(base_, offsets::playerent_health);
@@ -153,6 +278,14 @@ class player {
     [[nodiscard]] int gunselect() const noexcept {
         return memory::read<int>(base_, offsets::playerent_playerstate +
                                            offsets::playerstate_gunselect);
+    }
+    [[nodiscard]] int primary() const noexcept {
+        return memory::read<int>(base_, offsets::playerent_playerstate +
+                                           offsets::playerstate_primary);
+    }
+    [[nodiscard]] int secondary() const noexcept {
+        return memory::read<int>(base_, offsets::playerent_playerstate +
+                                           offsets::playerstate_secondary);
     }
 
     /// Rounds currently in the selected weapon's magazine (-1 when unknown).

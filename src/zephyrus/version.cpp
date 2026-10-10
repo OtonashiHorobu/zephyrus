@@ -4,15 +4,27 @@
 
 #include <zephyrus/version.hpp>
 
+#include <string>
+
 namespace zephyrus::version {
-std::string_view full_version() noexcept {
-    static const std::string full_version_static{
-        fmt::format("Zephyrus ACR {} [git {}:{}]"
+namespace {
+[[nodiscard]] std::string build(const std::string_view product) {
+    return fmt::format("{} {} [git {}:{}]"
 #if !defined(NDEBUG) || defined(_DEBUG)
-                    " [debug]"
+                       " [debug]"
 #endif
-                    ,
-                    release_version, branch_name, commit_hash)};
-    return full_version_static;
+                       ,
+                       product, release_version, branch_name, commit_hash);
+}
+} // namespace
+
+std::string_view full_version() noexcept {
+    static const std::string value{build("Zephyrus ACR")};
+    return value;
+}
+
+std::string_view csgo_version() noexcept {
+    static const std::string value{build("Zephyrus CS:GO")};
+    return value;
 }
 } // namespace zephyrus::version

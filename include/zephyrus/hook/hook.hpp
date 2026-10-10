@@ -40,6 +40,12 @@ struct module_info {
 [[nodiscard]] std::expected<module_info, std::string>
 module_of(const void *address) noexcept;
 
+/// Locate a loaded module by file name, e.g. "client_client.so". Matches the
+/// basename of every object recorded by `dl_iterate_phdr`, so it works for
+/// libraries the host opened with a relative or absolute path.
+[[nodiscard]] std::expected<module_info, std::string>
+find_module(std::string_view name) noexcept;
+
 /// IDA-style byte pattern scanning. Tokens are two hex digits separated by
 /// whitespace; `?` and `??` are wildcards, e.g. "55 48 89 E5 ?? 8B".
 [[nodiscard]] std::expected<const std::byte *, std::string>
@@ -92,6 +98,39 @@ class inline_hook {
     struct impl;
     explicit inline_hook(impl *state) noexcept;
     impl *state_{};
+};
+
+/// Writable pointer slot behind an `FF 25 rel32` thunk (`jmp qword ptr
+/// [rip+disp32]`). Some hosts (notably CS:GO's bundled SDL2) import every
+/// function through such a thunk whose slot lives in writable data, so
+/// swapping the slot redirects every caller of the exported function without
+/// patching code and works even when a prologue cannot be relocated.
+class pointer_slot {
+  public:
+    /// Inspect `function`; fails when it is not an `FF 25` thunk or the slot
+    /// lies outside the module containing the thunk.
+    [[nodiscard]] static std::expected<pointer_slot, std::string>
+    from_function(void *function) noexcept;
+
+    [[nodiscard]] bool valid() const noexcept { return slot_ != nullptr; }
+
+    /// Current implementation stored in the slot.
+    [[nodiscard]] void *value() const noexcept {
+        return slot_ != nullptr ? *slot_ : nullptr;
+    }
+
+    /// Redirect every caller of the thunk to `value`.
+    void set(void *value) const noexcept {
+        if (slot_ != nullptr) {
+            *slot_ = value;
+        }
+    }
+
+    /// Address of the pointer itself (useful for restore-by-value).
+    [[nodiscard]] void **address() const noexcept { return slot_; }
+
+  private:
+    void **slot_{};
 };
 
 namespace detail {

@@ -67,6 +67,9 @@
 #ifndef GL_INFO_LOG_LENGTH
 #define GL_INFO_LOG_LENGTH 0x8B84
 #endif
+#ifndef GL_VERTEX_ARRAY_BINDING
+#define GL_VERTEX_ARRAY_BINDING 0x85B5
+#endif
 
 namespace zephyrus::backend {
 namespace {
@@ -103,6 +106,22 @@ void *gl_proc(const char *name) {
 
 template <typename T> void load_proc(T &target, const char *name) {
     target = reinterpret_cast<T>(gl_proc(name));
+}
+
+/// Entry points needed to protect the host's state (only available with GL 3).
+struct state_api {
+    void (*bind_vertex_array)(unsigned int){};
+    void (*use_program)(unsigned int){};
+};
+
+const state_api &state_functions() {
+    static const state_api api{[] {
+        state_api result{};
+        load_proc(result.bind_vertex_array, "glBindVertexArray");
+        load_proc(result.use_program, "glUseProgram");
+        return result;
+    }()};
+    return api;
 }
 
 const layer_api &layer_functions() {
@@ -176,6 +195,43 @@ void render_interface_gl2::set_viewport(int in_viewport_width,
 void render_interface_gl2::begin_frame() {
     RMLUI_ASSERT(viewport_width_ >= 0 && viewport_height_ >= 0);
 
+    // Capture everything the fixed-function path needs to be alone with the
+    // GPU: a host GLSL program would ignore glVertexPointer/glMatrixMode, and
+    // depth/cull state would clip the overlay. Restored in end_frame().
+    if (!state_saved_) {
+        state_saved_ = true;
+        glGetIntegerv(GL_CURRENT_PROGRAM, &saved_program_);
+        saved_depth_test_ = glIsEnabled(GL_DEPTH_TEST);
+        GLboolean depth_mask{GL_TRUE};
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_mask);
+        saved_depth_mask_ = depth_mask == GL_TRUE ? 1 : 0;
+        saved_cull_face_ = glIsEnabled(GL_CULL_FACE);
+        glGetIntegerv(GL_ACTIVE_TEXTURE, &saved_active_texture_);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &saved_texture_2d_);
+        saved_blend_ = glIsEnabled(GL_BLEND);
+        glGetIntegerv(GL_BLEND_SRC_RGB, &saved_blend_src_);
+        glGetIntegerv(GL_BLEND_DST_RGB, &saved_blend_dst_);
+        saved_stencil_ = glIsEnabled(GL_STENCIL_TEST);
+        saved_scissor_ = glIsEnabled(GL_SCISSOR_TEST);
+        saved_vertex_array_ = 0;
+        if (const state_api &api{state_functions()};
+            api.bind_vertex_array != nullptr) {
+            glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &saved_vertex_array_);
+            api.bind_vertex_array(0);
+        } else {
+            saved_vertex_array_ = 0;
+        }
+    }
+    if (saved_program_ != 0) {
+        if (const state_api &api{state_functions()};
+            api.use_program != nullptr) {
+            api.use_program(0);
+        }
+    }
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_CULL_FACE);
+
     // Remember the target the host is rendering into. The injected overlay
     // must composite back into that same framebuffer: the game may render to
     // its own FBO and present it itself, binding framebuffer 0 here would
@@ -235,7 +291,64 @@ void render_interface_gl2::begin_frame() {
     sync_layer_pool();
 }
 
-void render_interface_gl2::end_frame() {}
+void render_interface_gl2::end_frame() {
+    if (!state_saved_) {
+        return;
+    }
+    state_saved_ = false;
+
+    if (saved_depth_test_ != 0) {
+        glEnable(GL_DEPTH_TEST);
+    } else {
+        glDisable(GL_DEPTH_TEST);
+    }
+    glDepthMask(saved_depth_mask_ != 0 ? GL_TRUE : GL_FALSE);
+    if (saved_cull_face_ != 0) {
+        glEnable(GL_CULL_FACE);
+    } else {
+        glDisable(GL_CULL_FACE);
+    }
+
+    if (saved_active_texture_ != 0) {
+        glActiveTexture(static_cast<GLenum>(saved_active_texture_));
+    }
+    glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(saved_texture_2d_));
+
+    if (saved_blend_ != 0) {
+        glEnable(GL_BLEND);
+    } else {
+        glDisable(GL_BLEND);
+    }
+    if (saved_blend_src_ != 0 || saved_blend_dst_ != 0) {
+        glBlendFunc(static_cast<GLenum>(saved_blend_src_),
+                    static_cast<GLenum>(saved_blend_dst_));
+    }
+    if (saved_stencil_ != 0) {
+        glEnable(GL_STENCIL_TEST);
+    } else {
+        glDisable(GL_STENCIL_TEST);
+    }
+    if (saved_scissor_ != 0) {
+        glEnable(GL_SCISSOR_TEST);
+    } else {
+        glDisable(GL_SCISSOR_TEST);
+    }
+
+    if (const state_api &api{state_functions()};
+        api.bind_vertex_array != nullptr && saved_vertex_array_ != 0) {
+        api.bind_vertex_array(
+            static_cast<unsigned int>(saved_vertex_array_));
+    }
+
+    if (saved_program_ != 0) {
+        if (const state_api &api{state_functions()};
+            api.use_program != nullptr) {
+            api.use_program(static_cast<unsigned int>(saved_program_));
+        }
+    }
+    saved_program_ = 0;
+    saved_vertex_array_ = 0;
+}
 
 void render_interface_gl2::clear() {
     glClearStencil(0);
@@ -734,13 +847,22 @@ Rml::LayerHandle render_interface_gl2::PushLayer() {
     layer_stack_.push_back(layer);
     bind_layer_target(layer);
 
-    // The new layer starts as transparent black within the active scissor.
+    // Clear the whole layer, not only the active scissor. The box-shadow blur
+    // chain down samples and samples the entire layer texture, so stale
+    // pixels of a previously reused layer outside the element's region would
+    // bleed into the shadow and show up as a transient black frame while the
+    // element is dragged or resized.
     GLboolean color_mask[4]{};
     glGetBooleanv(GL_COLOR_WRITEMASK, color_mask);
+    const GLboolean scissor_enabled{glIsEnabled(GL_SCISSOR_TEST)};
+    glDisable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glClearColor(0.0F, 0.0F, 0.0F, 0.0F);
     glClearStencil(0);
     glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    if (scissor_enabled) {
+        glEnable(GL_SCISSOR_TEST);
+    }
     glColorMask(color_mask[0], color_mask[1], color_mask[2], color_mask[3]);
 
     return reinterpret_cast<Rml::LayerHandle>(layer);
@@ -757,6 +879,28 @@ void render_interface_gl2::CompositeLayers(
         return;
     }
 
+    // IMPORTANT: capture the render state *before* the filter chain runs.
+    // The filter passes rebind framebuffers/viewports/textures and toggle
+    // blending; capturing afterwards (as this used to do) made the "restore"
+    // put the post-process state back instead, so every draw after the
+    // composite that frame lost blending and the correct target: text glyphs
+    // turned into black blocks and the box-shadow band went black while an
+    // element was dragged or a popup opened.
+    GLint previous_framebuffer{};
+    GLint previous_viewport[4]{};
+    GLint previous_texture{};
+    GLint previous_blend_src{};
+    GLint previous_blend_dst{};
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
+    glGetIntegerv(GL_VIEWPORT, previous_viewport);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &previous_blend_src);
+    glGetIntegerv(GL_BLEND_DST_RGB, &previous_blend_dst);
+    const GLboolean blend_enabled{glIsEnabled(GL_BLEND)};
+    const GLboolean scissor_enabled{glIsEnabled(GL_SCISSOR_TEST)};
+    GLint previous_scissor[4]{};
+    glGetIntegerv(GL_SCISSOR_BOX, previous_scissor);
+
     // Run the filter chain first (if any); the result is left in a post
     // process texture, `filtered_texture`/`filtered_u/v` describe it. When
     // the filters cannot run, dropping this frame's shadow beats falling back
@@ -772,25 +916,6 @@ void render_interface_gl2::CompositeLayers(
         }
     }
 
-
-    GLint previous_framebuffer{};
-    GLint previous_viewport[4]{};
-    GLint previous_texture{};
-    GLint previous_blend_src{};
-    GLint previous_blend_dst{};
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previous_framebuffer);
-    glGetIntegerv(GL_VIEWPORT, previous_viewport);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &previous_texture);
-    glGetIntegerv(GL_BLEND_SRC_RGB, &previous_blend_src);
-    glGetIntegerv(GL_BLEND_DST_RGB, &previous_blend_dst);
-    const GLboolean blend_enabled{glIsEnabled(GL_BLEND)};
-    // The source layer is only valid inside the active scissor region
-    // (PushLayer clears just that part), so the composite must never draw
-    // outside it: stale pixels of a reused layer would otherwise leak around
-    // freshly opened elements such as popups.
-    const GLboolean scissor_enabled{glIsEnabled(GL_SCISSOR_TEST)};
-    GLint previous_scissor[4]{};
-    glGetIntegerv(GL_SCISSOR_BOX, previous_scissor);
     glEnable(GL_SCISSOR_TEST);
 
     bind_layer_target(destination_layer);

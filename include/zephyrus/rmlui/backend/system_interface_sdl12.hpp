@@ -39,6 +39,10 @@ class system_interface_sdl12 : public Rml::SystemInterface {
     static int convert_mouse_button(int sdl_button);
     static int get_key_modifier_state();
 
+    /// Clipboard helpers (thin wrappers around the host SDL2/3 library).
+    static void SetClipboard(const std::string_view &text);
+    [[nodiscard]] static Rml::String GetClipboard();
+
   private:
     std::unordered_map<std::string_view, SDL_Cursor *> cursors_;
 };

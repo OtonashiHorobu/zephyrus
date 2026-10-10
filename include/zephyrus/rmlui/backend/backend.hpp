@@ -13,6 +13,10 @@ namespace Rml {
 class Context;
 }
 
+namespace zephyrus {
+enum class backend_mode;
+}
+
 /// Callback invoked for key-down events before the context consumes them.
 /// Mirrors the helper interface shipped with the RmlUi sample backends; we
 /// vendor it so zephyrus does not depend on RmlUi's source tree layout.
@@ -22,13 +26,17 @@ using KeyDownCallback =
 
 namespace Backend {
 
-/// Standalone only: opens a window and initializes the SDL/GL backends.
-bool Initialize(const char *window_name, int width, int height,
-                bool allow_resize);
+/// Initialize the backend selected by `mode`:
+///  - `standalone`: opens a window and initializes SDL/GL (own process);
+///  - `injected`: attaches the system/render interfaces to the host's
+///    existing SDL state and OpenGL context.
+bool Initialize(zephyrus::backend_mode mode, const char *window_name,
+                int width, int height, bool allow_resize);
 
-/// Injected mode: attaches the system/render interfaces to the host's
-/// existing SDL state and OpenGL context.
-bool InitializeInjected();
+/// True while the host's GL context (and, in injected mode, its SDL video
+/// subsystem) is still alive; used to decide between a clean shutdown and the
+/// emergency abandon path.
+bool ContextAlive();
 
 /// Keep the render interface's viewport in sync with the host window.
 void SetViewport(int width, int height);

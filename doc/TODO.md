@@ -1,10 +1,63 @@
 # zephyrus TODO
 
-> 最后更新：2026-10-09（本轮结束）
+> 最后更新：2026-10-09（HvH 功能轮）
 > 状态标记：`[x]` 完成 · `[~]` 进行中/待验证 · `[ ]` 未开始
 > 当前所有改动均未提交（zephyrus 与 acr-git 工作区 dirty）
+>
+> 多游戏分块计划与分模块 TODO：[csgo-port-plan.md](csgo-port-plan.md) ·
+> [todo-shared.md](todo-shared.md) · [todo-acr.md](todo-acr.md) · [todo-csgo.md](todo-csgo.md)
 
-## 0. 本轮修复（已完成）
+## A. HvH 功能轮（2026-10-09）
+
+### A.0 黑框根因（本次攻克）
+
+- [x] **拖动/弹窗时的黑框、文字黑块、灰色高亮变黑**
+  - 根因：`CompositeLayers()` 在 `apply_filters()` **之后**才 `glGet*` 保存渲染状态，
+    滤镜管线把 FBO 切到 post target、viewport 改小、blend 关闭之后，"恢复"把这些
+    中间状态当原状态写回；本帧之后所有 UI（文字/高亮/阴影）在错误状态下绘制。
+  - 修复：状态保存移到滤镜链之前（`render_interface_gl2.cpp`）。
+  - 附带修复：`PushLayer` 全纹理清理（避免复用 layer 的陈旧像素被 blur 降采样
+    链抹进阴影）。
+  - 状态：用户实测 "works perfectly"。
+
+### A.1 新增模块
+
+- [x] `features/movement`：speedhack（maxspeed 缩放）、auto bhop、空中即时换向
+  （游戏 200Hz 内层 `moveplayer` hook，逐 substep 生效；视角不动）。
+- [x] `features/exploits`：
+  - 飞刀协议杀（`SV_WEAPCHANGE → SV_SHOOTC → SV_EXPLODE(flags=victim)`，延迟还原武器
+    避免排队事件被 `gunselect` 检查丢弃；可选回收落刀循环）；
+  - 手雷远程引爆（客户端坐标直接 `SV_EXPLODE`）；
+  - 伪造发包位（force_scope / force_crouch / zero_velocity / force_onfloor，
+    hook `sendposition` 临时改写后还原）；
+  - teleport/blink（前向/准星/目标背后；`entinmap` 校验 + 落地 + 可选黑屏淡出）。
+- [x] `addshotline` hook：远程出生保护同步 + 弹道线缓冲（ESP tracer）。
+- [x] rage：爆头磁铁数学修正（弹线上距服务端脖颈最近点、≤1.95 夹取）、
+  `skip_protected`、`head_magnet_all/strength`、hitchance 计入伪造包状态。
+- [x] spawn protection 精确镜像（`gametype[].implied` + `lastspawn`），ESP 护盾 +
+  倒计时文本。
+- [x] **射击崩溃修复**：游戏 `vec` 是 float/int union（SysV INTEGER 分类），
+  `addshotline(playerent*, vec, ...)` 按值参数走 rsi/rdx/rcx；`acr::vec3` 改为同
+  union 布局后 ABI 对齐（原来纯 float → SSE，栈上 `to` 指针是垃圾 → SIGSEGV）。
+- [x] **配置系统（TOML / toml++）**：启动默认空配置；`ZEPHYRUS_ACR_CONFIG=<file>`
+  显式加载；所有改动自动快照到 `~/.config/zephyrus/latest.toml`（只写不自动读）；
+  命名 profile 存取于 `profiles/`；剪贴板导入导出；OAE 风格两栏 Config 卡片
+  （列表 + 名称 + Create/Save/Load/Delete/Open folder/Reset/Export/Import）。
+- [x] 测试通道：Unix 文件命令 `/run/user/$UID/zephyrus-cmd`（`knife [cn]`、`nade [cn]`、
+  `blink`、`goto <cn>`、`lookat <cn>`、`players`、`dump`、`key <input> <0|1>`、
+  `movement/air/bhop/speed`、`config ...`、`ui open/close/tab/panel/reset`）。
+- [x] 启动器 `/datassd/Clone/acr-bin/client-zephyrus.sh`（自动找库；强制
+  `SDL_VIDEODRIVER=x11`，覆盖环境里的 wayland）。
+
+### A.2 待验证 / 待办
+
+- [~] **飞刀/手雷对敌伤害端到端验证**（代码路径与 "sent" 日志已验证，延迟还原修复后
+  还需要一次带 bot 的定向测试：`players` 挑敌人 → `knife <cn>` → 看 hp 变化）。
+- [ ] 服务端视野内的 fake-bit 效果实测（服务端认为开镜/下蹲/静止的 spread 统计）。
+- [ ] `doc/AGENTS.md` 功能模块表补充 movement/exploits/config 与测试通道说明。
+- [ ] 提交两个仓库的工作区改动。
+
+## 0. 上轮修复（已完成）
 
 - [x] **菜单缩放后布局塌陷**（子元素整体偏移、header 消失、侧栏被裁）
   - 根因：`#menu` 用 `left:50% + margin-left:-450dp` 居中，RmlUi 在元素尺寸变化后

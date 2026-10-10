@@ -273,4 +273,42 @@ std::string_view key_name(int key) noexcept {
         return "Key";
     }
 }
+
+int key_from_name(std::string_view name) noexcept {
+    for (int code{}; code < SDLK_LAST; ++code) {
+        const std::string_view candidate{key_name(code)};
+        if (candidate == name && candidate != "Key" &&
+            candidate != "Unknown") {
+            return code;
+        }
+    }
+    return 0;
+}
+
+std::string_view keybind_mode_name(keybind_mode mode) noexcept {
+    switch (mode) {
+    case keybind_mode::off:
+        return "off";
+    case keybind_mode::always:
+        return "always";
+    case keybind_mode::hold:
+        return "hold";
+    case keybind_mode::toggle:
+        return "toggle";
+    }
+    return "always";
+}
+
+keybind_mode keybind_mode_from_name(std::string_view name) noexcept {
+    if (name == "off") {
+        return keybind_mode::off;
+    }
+    if (name == "hold") {
+        return keybind_mode::hold;
+    }
+    if (name == "toggle") {
+        return keybind_mode::toggle;
+    }
+    return keybind_mode::always;
+}
 } // namespace zephyrus

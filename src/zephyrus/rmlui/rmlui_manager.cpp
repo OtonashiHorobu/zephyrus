@@ -5,13 +5,11 @@
 #include <zephyrus/log.hpp>
 #include <zephyrus/rmlui/backend/backend.hpp>
 #include <zephyrus/rmlui/rmlui_manager.hpp>
-#include <zephyrus/sdl/sdl.hpp>
 #include <zephyrus/zephyrus.hpp>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Core.h>
 #include <RmlUi/Core/ElementDocument.h>
-#include <SDL/SDL.h>
 
 #include <array>
 
@@ -57,6 +55,39 @@ void load_default_font() noexcept {
             break;
         }
     }
+
+    // CJK fallback: the mono faces above carry no Han glyphs, so Chinese
+    // text would render as tofu without this.
+    struct cjk_candidate {
+        const char *path;
+        int face_index;
+    };
+    constexpr std::array cjk_candidates{
+        cjk_candidate{"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                      7}, // Noto Sans Mono CJK SC
+        cjk_candidate{"/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+                      2}, // Noto Sans CJK SC
+        cjk_candidate{"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                      7},
+        cjk_candidate{"/usr/share/fonts/wqy-microhei/wqy-microhei.ttc", 0},
+        cjk_candidate{"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", 0},
+    };
+
+    bool cjk_loaded{};
+    for (const auto &candidate : cjk_candidates) {
+        if (Rml::LoadFontFace(candidate.path, true,
+                              Rml::Style::FontWeight::Normal,
+                              candidate.face_index)) {
+            ZEPHYRUS_INFO("cjk fallback font loaded: {} (face {})",
+                          candidate.path, candidate.face_index);
+            cjk_loaded = true;
+            break;
+        }
+    }
+    if (!cjk_loaded) {
+        ZEPHYRUS_WARN("no CJK fallback font could be loaded");
+    }
+
     if (!loaded) {
         ZEPHYRUS_WARN("no system font could be loaded");
     }
@@ -73,24 +104,9 @@ rmlui_manager::result_type rmlui_manager::init_impl() noexcept {
     }
     Rml::SetFileInterface(file_interface_.get());
 
-    const sdl::api *sdl_api{sdl::get()};
-    if (auto result{sdl::initialize()}; !result) {
-        return std::unexpected{"SDL is not available: " + result.error()};
-    }
-    sdl_api = sdl::get();
-    if (sdl_api == nullptr) {
-        return std::unexpected{"SDL function table is not available"};
-    }
-
-    ZEPHYRUS_INFO("initializing sdl12/gl2 backend");
-    if (mode_ == backend_mode::standalone) {
-        if (!Backend::Initialize("Zephyrus", width_, height_, true)) {
-            return std::unexpected{"failed to initialize sdl12 backend"};
-        }
-    } else {
-        if (!Backend::InitializeInjected()) {
-            return std::unexpected{"failed to initialize injected backend"};
-        }
+    ZEPHYRUS_INFO("initializing platform backend");
+    if (!Backend::Initialize(mode_, "Zephyrus", width_, height_, true)) {
+        return std::unexpected{"failed to initialize the platform backend"};
     }
 
     ZEPHYRUS_INFO("initializing rmlui core");
@@ -114,10 +130,7 @@ void rmlui_manager::shutdown_impl() noexcept {
     context_ = nullptr;
     document_ = nullptr;
 
-    const sdl::api *api{sdl::get()};
-    const bool gl_valid{mode_ == backend_mode::standalone ||
-                        (api != nullptr &&
-                         api->was_init(SDL_INIT_VIDEO) != 0)};
+    const bool gl_valid{Backend::ContextAlive()};
 
     if (gl_valid) {
         // Release every GPU resource while the host's GL context is still
@@ -126,7 +139,7 @@ void rmlui_manager::shutdown_impl() noexcept {
         ZEPHYRUS_TRACE("shutting down rmlui core");
         Rml::Shutdown();
 
-        ZEPHYRUS_TRACE("shutting down sdl12/gl2 backend");
+        ZEPHYRUS_TRACE("shutting down platform backend");
         Backend::Shutdown();
     } else {
         ZEPHYRUS_WARN(

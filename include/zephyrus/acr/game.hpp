@@ -58,8 +58,62 @@ class game {
     [[nodiscard]] float zone_damage(int gun, float distance,
                                     int hitzone) const noexcept;
 
+    // ------------------------------------------------------------------
+    // Server-side mirror helpers (spawn protection, protocol, movement).
+    // ------------------------------------------------------------------
+
+    /// Current server wall clock (`lastmillis`).
+    [[nodiscard]] int now() const noexcept;
+
+    [[nodiscard]] int gamemode() const noexcept;
+    [[nodiscard]] int mutators() const noexcept;
+    /// `gametype[gamemode].implied` from the game's mode table.
+    [[nodiscard]] int mode_implied() const noexcept;
+    /// Exact mirror of the `SPAWNPROTECT` macro (1000/1500/2000/1750 ms).
+    [[nodiscard]] int spawn_protect_ms() const noexcept;
+
+    /// Crosshair hit position (`worldhitpos`).
+    [[nodiscard]] vec3 crosshair_position() const noexcept;
+
+    /// `raycube(o, ray, surface)`: distance to the first world hit.
+    [[nodiscard]] float raycube(const vec3 &from, const vec3 &direction,
+                                vec3 *surface = nullptr) const noexcept;
+
+    /// `entinmap(physent*)`: push the entity out of solid geometry.
+    void entinmap(void *physent) const noexcept;
+
+    /// Send a position update for one player right now.
+    void send_position(void *physent) const noexcept;
+
+    /// Flush the queued client messages (`c2sinfo(true)`).
+    void flush_messages() const noexcept;
+
+    /// Raw `addmsg` entry point (`void addmsg(int, const char*, ...)`). The
+    /// variadic call cannot be forwarded through a wrapper, so callers that
+    /// need message types beyond the helpers below invoke it directly.
+    using addmsg_fn = void (*)(int, const char *, ...);
+    [[nodiscard]] addmsg_fn message_sender() const noexcept {
+        return addmsg_;
+    }
+
+    // Typed client->server messages used by the exploit actions.
+    void message_weapchange(int cn, int gun) const noexcept;
+    void message_quickswitch(int cn) const noexcept;
+    void message_shootc(int cn, int id, int gun) const noexcept;
+    void message_explode(int cn, int id, int gun, int flags,
+                         const vec3 &o) const noexcept;
+
+    /// `vecfromyawpitch(yaw, 0, move, strafe, out)`.
+    void vec_from_yaw_pitch(float yaw, int move, int strafe,
+                            vec3 &out) const noexcept;
+
   private:
     using raycubelos_fn = bool (*)(const vec3 &, const vec3 &, float);
+    using raycube_fn = float (*)(const vec3 &, const vec3 &, void *);
+    using entinmap_fn = void (*)(void *);
+    using sendposition_fn = void (*)(void *);
+    using c2sinfo_fn = void (*)(bool);
+    using vecfromyawpitch_fn = void (*)(float, float, int, int, void *);
     using world_to_screen_fn = int (*)(const vec3 &, void *, int);
     using draw_text_fn = void (*)(const char *, int, int, int, int, int, int,
                                   int, int);
@@ -75,8 +129,19 @@ class game {
     const std::byte *guns_{};
     const float *muls_{};
     float (*effective_damage_)(int, float, bool, bool){};
+    int *gamemode_{};
+    int *mutators_{};
+    int *lastmillis_{};
+    float *worldhitpos_{};
+    const std::byte *gametype_{};
 
     raycubelos_fn visible_{};
+    raycube_fn raycube_{};
+    entinmap_fn entinmap_{};
+    sendposition_fn sendposition_{};
+    addmsg_fn addmsg_{};
+    c2sinfo_fn c2sinfo_{};
+    vecfromyawpitch_fn vecfromyawpitch_{};
     world_to_screen_fn world_to_screen_{};
     draw_text_fn draw_text_{};
     add_bot_fn add_bot_{};

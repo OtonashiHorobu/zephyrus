@@ -9,6 +9,7 @@
 #include <zephyrus/rmlui/backend/render_interface_gl2.hpp>
 #include <zephyrus/rmlui/backend/system_interface_sdl12.hpp>
 #include <zephyrus/sdl/sdl.hpp>
+#include <zephyrus/zephyrus.hpp>
 
 #include <RmlUi/Core/Context.h>
 #include <RmlUi/Core/Core.h>
@@ -31,11 +32,28 @@ std::unique_ptr<backend_data> bd;
 } // namespace
 
 namespace Backend {
-bool Initialize(const char *const window_name, const int width,
-                const int height, [[maybe_unused]] const bool allow_resize) {
+bool Initialize(const zephyrus::backend_mode mode, const char *const window_name,
+                const int width, const int height,
+                [[maybe_unused]] const bool allow_resize) {
     std::lock_guard<std::mutex> lock{bd_mutex};
 
     if (bd) {
+        return false;
+    }
+
+    if (mode != zephyrus::backend_mode::standalone) {
+        // Injected mode: the host game already owns the window, SDL and GL
+        // context. Only the interfaces are created here; the RmlUi runtime is
+        // initialized later, from the first present callback.
+        bd = std::make_unique<backend_data>();
+        bd->injected = true;
+        bd->system_interface.init_cursors();
+        return true;
+    }
+
+    if (auto result{zephyrus::sdl::initialize()}; !result) {
+        Rml::Log::Message(Rml::Log::LT_ERROR, "SDL function table unavailable: %s",
+                          result.error().c_str());
         return false;
     }
 
@@ -84,19 +102,16 @@ bool Initialize(const char *const window_name, const int width,
     return true;
 }
 
-bool InitializeInjected() {
+bool ContextAlive() {
     std::lock_guard<std::mutex> lock{bd_mutex};
-
-    if (bd) {
+    if (!bd) {
         return false;
     }
-
-    bd = std::make_unique<backend_data>();
-    bd->injected = true;
-
-    bd->system_interface.init_cursors();
-
-    return true;
+    if (!bd->injected) {
+        return true;
+    }
+    const zephyrus::sdl::api *api{zephyrus::sdl::get()};
+    return api != nullptr && api->was_init(SDL_INIT_VIDEO) != 0;
 }
 
 void Shutdown() {

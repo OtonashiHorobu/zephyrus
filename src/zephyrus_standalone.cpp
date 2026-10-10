@@ -3,9 +3,9 @@
 // SPDX-FileCopyrightText: Copyright(c) 2026 Otonashi Horobu
 
 #include <zephyrus/asset/ui.hpp>
-#include <zephyrus/features/esp.hpp>
-#include <zephyrus/features/rage.hpp>
-#include <zephyrus/overlay/menu.hpp>
+#include <zephyrus/features/acr/esp.hpp>
+#include <zephyrus/features/acr/rage.hpp>
+#include <zephyrus/overlay/acr/menu.hpp>
 #include <zephyrus/rmlui/backend/backend.hpp>
 #include <zephyrus/zephyrus.hpp>
 
@@ -50,11 +50,14 @@ int main(int argc, char **argv) {
     zephyrus::features::esp esp;
     zephyrus::features::rage rage;
     zephyrus::features::thirdperson thirdperson;
+    zephyrus::features::movement movement;
+    zephyrus::features::exploits exploits;
     zephyrus::overlay::menu menu;
     zephyrus::keybind menu_key;
     if (auto *document{app.rmlui_manager().document()}; document != nullptr) {
         menu.initialize(*document, nullptr, &esp, &rage, &thirdperson,
-                        &menu_key, [] {});
+                        &movement, &exploits, &menu_key, [] {},
+                        zephyrus::overlay::config_actions{});
     }
 
     bool running{true};
