@@ -44,6 +44,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <numbers>
@@ -1305,6 +1306,7 @@ void install_overlay_when_ready() noexcept {
                 return local.valid() && local.is_alive();
             };
             candidate->esp_draw = [](Rml::Element &layer) {
+                constexpr float unset{std::numeric_limits<float>::quiet_NaN()};
                 struct row {
                     Rml::Element *box{};
                     Rml::Element *health_bg{};
@@ -1313,24 +1315,99 @@ void install_overlay_when_ready() noexcept {
                     Rml::Element *weapon{};
                     Rml::Element *distance{};
                     Rml::Element *snapline{};
+                    // Cached widget state: writing the same property again
+                    // still dirties RmlUi layout, which was the top CPU
+                    // consumer while the menu is open. Only changes are
+                    // written.
+                    bool box_shown{};
+                    float box_left{unset};
+                    float box_top{unset};
+                    float box_width{unset};
+                    float box_height{unset};
+                    bool box_visible{};
+                    bool box_team{};
+                    bool box_enemy{};
+                    bool health_shown{};
+                    bool fill_shown{};
+                    float health_left{unset};
+                    float health_top{unset};
+                    float health_height{unset};
+                    float fill_height{unset};
+                    bool name_shown{};
+                    float name_left{unset};
+                    float name_top{unset};
+                    std::string name_text;
+                    bool weapon_shown{};
+                    float weapon_left{unset};
+                    float weapon_top{unset};
+                    std::string weapon_text;
+                    bool distance_shown{};
+                    float distance_left{unset};
+                    float distance_top{unset};
+                    std::string distance_text;
+                    bool snapline_shown{};
+                    float snapline_left{unset};
+                    float snapline_top{unset};
+                    float snapline_width{unset};
+                    std::string snapline_transform;
                 };
                 static std::vector<row> rows;
                 static Rml::ElementDocument *rows_document{};
 
-                const auto hide = [](Rml::Element *element) {
-                    if (element != nullptr) {
-                        element->SetProperty("display", "none");
+                const auto set_display = [](bool &cached, Rml::Element *element,
+                                            const bool visible) {
+                    if (element == nullptr || cached == visible) {
+                        return;
                     }
+                    cached = visible;
+                    element->SetProperty("display",
+                                         visible ? "block" : "none");
                 };
-                const auto hide_all = [&hide] {
+                const auto set_value = [](float &cached, Rml::Element *element,
+                                          const char *property,
+                                          const float value) {
+                    if (element == nullptr) {
+                        return;
+                    }
+                    const float rounded{
+                        static_cast<float>(std::lround(value))};
+                    if (cached == rounded) {
+                        return;
+                    }
+                    cached = rounded;
+                    char buffer[32]{};
+                    std::snprintf(buffer, sizeof(buffer), "%dpx",
+                                  static_cast<int>(rounded));
+                    element->SetProperty(property, buffer);
+                };
+                const auto set_text_value = [](std::string &cached,
+                                               Rml::Element *element,
+                                               const std::string_view text) {
+                    if (element == nullptr || cached == text) {
+                        return;
+                    }
+                    cached.assign(text);
+                    element->SetInnerRML(escape_rml(text));
+                };
+                const auto set_class = [](bool &cached, Rml::Element *element,
+                                          const char *name, const bool value) {
+                    if (element == nullptr || cached == value) {
+                        return;
+                    }
+                    cached = value;
+                    element->SetClass(name, value);
+                };
+                const auto hide_all = [&set_display] {
                     for (row &entry : rows) {
-                        hide(entry.box);
-                        hide(entry.health_bg);
-                        hide(entry.health_fill);
-                        hide(entry.name);
-                        hide(entry.weapon);
-                        hide(entry.distance);
-                        hide(entry.snapline);
+                        set_display(entry.box_shown, entry.box, false);
+                        set_display(entry.health_shown, entry.health_bg, false);
+                        set_display(entry.fill_shown, entry.health_fill, false);
+                        set_display(entry.name_shown, entry.name, false);
+                        set_display(entry.weapon_shown, entry.weapon, false);
+                        set_display(entry.distance_shown, entry.distance,
+                                    false);
+                        set_display(entry.snapline_shown, entry.snapline,
+                                    false);
                     }
                 };
 
@@ -1380,24 +1457,6 @@ void install_overlay_when_ready() noexcept {
                     parent.AppendChild(std::move(element));
                     return raw;
                 };
-                const auto set_px = [](Rml::Element *element,
-                                       const char *property,
-                                       const float value) {
-                    if (element == nullptr) {
-                        return;
-                    }
-                    char buffer[32]{};
-                    std::snprintf(buffer, sizeof(buffer), "%dpx",
-                                  static_cast<int>(std::lround(value)));
-                    element->SetProperty(property, buffer);
-                };
-                const auto set_visible = [](Rml::Element *element,
-                                            const bool visible) {
-                    if (element != nullptr) {
-                        element->SetProperty("display",
-                                             visible ? "block" : "none");
-                    }
-                };
 
                 if (rows.empty()) {
                     rows.reserve(65);
@@ -1434,88 +1493,99 @@ void install_overlay_when_ready() noexcept {
                     const float height{drawable.bottom - drawable.top};
                     const auto &options{esp->options()};
 
-                    set_visible(entry.box, options.box);
-                    if (entry.box != nullptr) {
-                        set_px(entry.box, "left", drawable.left);
-                        set_px(entry.box, "top", drawable.top);
-                        set_px(entry.box, "width", width);
-                        set_px(entry.box, "height", height);
-                        entry.box->SetClass("visible", drawable.visible);
-                        entry.box->SetClass("team", drawable.teammate);
-                        entry.box->SetClass("enemy", !drawable.teammate);
-                    }
+                    set_display(entry.box_shown, entry.box, options.box);
+                    set_value(entry.box_left, entry.box, "left",
+                              drawable.left);
+                    set_value(entry.box_top, entry.box, "top", drawable.top);
+                    set_value(entry.box_width, entry.box, "width", width);
+                    set_value(entry.box_height, entry.box, "height", height);
+                    set_class(entry.box_visible, entry.box, "visible",
+                              drawable.visible);
+                    set_class(entry.box_team, entry.box, "team",
+                              drawable.teammate);
+                    set_class(entry.box_enemy, entry.box, "enemy",
+                              !drawable.teammate);
 
-                    set_visible(entry.health_bg, options.health);
-                    if (entry.health_bg != nullptr) {
-                        set_px(entry.health_bg, "left", drawable.left - 6.0F);
-                        set_px(entry.health_bg, "top", drawable.top);
-                        set_px(entry.health_bg, "height", height);
-                    }
-                    set_visible(entry.health_fill, options.health);
-                    if (entry.health_fill != nullptr) {
-                        set_px(entry.health_fill, "height",
-                               height * drawable.health);
-                    }
+                    set_display(entry.health_shown, entry.health_bg,
+                                options.health);
+                    set_value(entry.health_left, entry.health_bg, "left",
+                              drawable.left - 6.0F);
+                    set_value(entry.health_top, entry.health_bg, "top",
+                              drawable.top);
+                    set_value(entry.health_height, entry.health_bg, "height",
+                              height);
+                    set_display(entry.fill_shown, entry.health_fill,
+                                options.health);
+                    set_value(entry.fill_height, entry.health_fill, "height",
+                              height * drawable.health);
 
-                    set_visible(entry.name,
+                    set_display(entry.name_shown, entry.name,
                                 options.name && !drawable.name.empty());
-                    if (entry.name != nullptr) {
-                        set_px(entry.name, "left", drawable.left);
-                        set_px(entry.name, "top", drawable.top - 16.0F);
-                        // Player names are remote data: never feed them to
-                        // the RML parser unescaped.
-                        entry.name->SetInnerRML(escape_rml(drawable.name));
-                    }
+                    set_value(entry.name_left, entry.name, "left",
+                              drawable.left);
+                    set_value(entry.name_top, entry.name, "top",
+                              drawable.top - 16.0F);
+                    // Player names are remote data: never feed them to the
+                    // RML parser unescaped (set_text_value escapes).
+                    set_text_value(entry.name_text, entry.name, drawable.name);
 
-                    set_visible(entry.weapon,
+                    set_display(entry.weapon_shown, entry.weapon,
                                 options.weapon && !drawable.weapon.empty());
-                    if (entry.weapon != nullptr) {
-                        set_px(entry.weapon, "left", drawable.left);
-                        set_px(entry.weapon, "top", drawable.bottom + 2.0F);
-                        entry.weapon->SetInnerRML(escape_rml(drawable.weapon));
-                    }
+                    set_value(entry.weapon_left, entry.weapon, "left",
+                              drawable.left);
+                    set_value(entry.weapon_top, entry.weapon, "top",
+                              drawable.bottom + 2.0F);
+                    set_text_value(entry.weapon_text, entry.weapon,
+                                   drawable.weapon);
 
-                    set_visible(entry.distance, options.distance);
-                    if (entry.distance != nullptr) {
-                        set_px(entry.distance, "left", drawable.left);
-                        set_px(entry.distance, "top", drawable.bottom + 16.0F);
-                        char buffer[32]{};
-                        std::snprintf(buffer, sizeof(buffer), "%.0fm",
-                                      static_cast<double>(drawable.distance));
-                        entry.distance->SetInnerRML(buffer);
-                    }
+                    set_display(entry.distance_shown, entry.distance,
+                                options.distance);
+                    set_value(entry.distance_left, entry.distance, "left",
+                              drawable.left);
+                    set_value(entry.distance_top, entry.distance, "top",
+                              drawable.bottom + 16.0F);
+                    char distance_buffer[32]{};
+                    std::snprintf(distance_buffer, sizeof(distance_buffer),
+                                  "%.0fm",
+                                  static_cast<double>(drawable.distance));
+                    set_text_value(entry.distance_text, entry.distance,
+                                   distance_buffer);
 
-                    set_visible(entry.snapline, options.snapline);
-                    if (entry.snapline != nullptr) {
-                        const float x0{static_cast<float>(dimensions.x) * 0.5F};
-                        const float y0{static_cast<float>(dimensions.y)};
-                        const float x1{(drawable.left + drawable.right) * 0.5F};
-                        const float y1{drawable.bottom};
-                        const float dx{x1 - x0};
-                        const float dy{y1 - y0};
-                        set_px(entry.snapline, "left", x0);
-                        set_px(entry.snapline, "top", y0);
-                        set_px(entry.snapline, "width",
-                               std::sqrt(dx * dx + dy * dy));
-                        char transform[48]{};
-                        std::snprintf(
-                            transform, sizeof(transform), "rotate(%ddeg)",
-                            static_cast<int>(std::lround(
-                                std::atan2(dy, dx) / std::numbers::pi_v<float> *
-                                180.0F)));
+                    set_display(entry.snapline_shown, entry.snapline,
+                                options.snapline);
+                    const float x0{static_cast<float>(dimensions.x) * 0.5F};
+                    const float y0{static_cast<float>(dimensions.y)};
+                    const float x1{(drawable.left + drawable.right) * 0.5F};
+                    const float y1{drawable.bottom};
+                    const float dx{x1 - x0};
+                    const float dy{y1 - y0};
+                    set_value(entry.snapline_left, entry.snapline, "left",
+                              x0);
+                    set_value(entry.snapline_top, entry.snapline, "top", y0);
+                    set_value(entry.snapline_width, entry.snapline, "width",
+                              std::sqrt(dx * dx + dy * dy));
+                    char transform[48]{};
+                    std::snprintf(
+                        transform, sizeof(transform), "rotate(%ddeg)",
+                        static_cast<int>(std::lround(
+                            std::atan2(dy, dx) / std::numbers::pi_v<float> *
+                            180.0F)));
+                    if (entry.snapline != nullptr &&
+                        entry.snapline_transform != transform) {
+                        entry.snapline_transform = transform;
                         entry.snapline->SetProperty("transform", transform);
                     }
                 }
 
                 for (; used < rows.size(); ++used) {
                     row &entry{rows[used]};
-                    hide(entry.box);
-                    hide(entry.health_bg);
-                    hide(entry.health_fill);
-                    hide(entry.name);
-                    hide(entry.weapon);
-                    hide(entry.distance);
-                    hide(entry.snapline);
+                    set_display(entry.box_shown, entry.box, false);
+                    set_display(entry.health_shown, entry.health_bg, false);
+                    set_display(entry.fill_shown, entry.health_fill, false);
+                    set_display(entry.name_shown, entry.name, false);
+                    set_display(entry.weapon_shown, entry.weapon, false);
+                    set_display(entry.distance_shown, entry.distance, false);
+                    set_display(entry.snapline_shown, entry.snapline, false);
                 }
             };
             // Retried from the game thread every frame until everything is
