@@ -387,6 +387,10 @@ void handle_command(const std::string_view line) noexcept {
                 overlay->menu_controller().show_tab(argument);
             } else if (action == "panel" && !argument.empty()) {
                 overlay->menu_controller().show_panel(argument);
+            } else if (action == "hide" && !argument.empty()) {
+                overlay->menu_controller().set_element_visible(argument, false);
+            } else if (action == "show" && !argument.empty()) {
+                overlay->menu_controller().set_element_visible(argument, true);
             } else {
                 ZEPHYRUS_WARN("unknown ui action '{}'", value);
             }
@@ -425,6 +429,52 @@ void handle_command(const std::string_view line) noexcept {
                 }
             } else {
                 ZEPHYRUS_WARN("unknown config action '{}'", value);
+            }
+        }
+    } else if (name == "perf") {
+        if (overlay == nullptr) {
+            ZEPHYRUS_WARN("perf: overlay not ready");
+        } else {
+            const auto space2{value.find(' ')};
+            const std::string_view what{value.substr(0, space2)};
+            const std::string_view state{
+                space2 == std::string_view::npos
+                    ? std::string_view{}
+                    : value.substr(space2 + 1)};
+            const bool enabled{state != "off"};
+            if (what == "fps") {
+                overlay->menu_controller().set_fps_updates(enabled);
+                ZEPHYRUS_INFO("perf fps {}", enabled ? "on" : "off");
+            } else if (what == "anim") {
+                overlay->menu_controller().set_caret_animation(enabled);
+                ZEPHYRUS_INFO("perf anim {}", enabled ? "on" : "off");
+            } else {
+                ZEPHYRUS_WARN("unknown perf action '{}'", value);
+            }
+        }
+    } else if (name == "style") {
+        if (overlay == nullptr) {
+            ZEPHYRUS_WARN("style: overlay not ready");
+        } else {
+            // style <selector> <property> <value...>
+            const auto first{value.find(' ')};
+            const std::string_view selector{value.substr(0, first)};
+            const std::string_view rest{
+                first == std::string_view::npos
+                    ? std::string_view{}
+                    : value.substr(first + 1)};
+            const auto second{rest.find(' ')};
+            const std::string_view property{rest.substr(0, second)};
+            const std::string_view setting{
+                second == std::string_view::npos
+                    ? std::string_view{}
+                    : rest.substr(second + 1)};
+            if (selector.empty() || property.empty()) {
+                ZEPHYRUS_WARN("style: usage: style <selector> <property> "
+                              "<value|->");
+            } else {
+                overlay->menu_controller().set_style(
+                    selector, property, setting == "-" ? "" : setting);
             }
         }
     } else if (name == "dump") {

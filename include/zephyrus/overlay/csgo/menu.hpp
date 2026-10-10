@@ -43,6 +43,19 @@ class menu final : public Rml::EventListener {
     /// Per-frame bookkeeping: fps readout, config autosave, scroll clamp.
     void tick() noexcept;
 
+    /// Perf debugging: toggle the 2 Hz fps text updates and the caret blink
+    /// animation at runtime (both dirty/annotate the document).
+    void set_fps_updates(bool enabled) noexcept { fps_enabled_ = enabled; }
+    void set_caret_animation(bool enabled) noexcept;
+
+    /// Perf debugging: hide/show an element by id (bisecting relayout cost).
+    void set_element_visible(std::string_view id, bool visible) noexcept;
+
+    /// Perf debugging: apply a property to every element matching a selector
+    /// (empty value removes the property).
+    void set_style(std::string_view selector, std::string_view property,
+                   std::string_view value) noexcept;
+
     /// Window size in pixels, fed by the overlay (drag/resize clamping).
     void set_viewport(int width, int height) noexcept;
 
@@ -252,5 +265,6 @@ class menu final : public Rml::EventListener {
 
     std::chrono::steady_clock::time_point fps_window_{};
     int fps_frames_{};
+    bool fps_enabled_{true};
 };
 } // namespace zephyrus::csgo::overlay

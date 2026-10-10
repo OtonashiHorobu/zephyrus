@@ -40,8 +40,9 @@
 - [x] 游戏内鼠标修复：菜单可见时拦截 `SDL_SetRelativeMouseMode(TRUE)` /
       `SDL_WarpMouseInWindow` / `SDL_ShowCursor(0)`，并按帧轮询 `SDL_GetMouseState`
       合成 down/up（游戏用自身事件路径消费按键事件，事件队列不可靠）。
-- [ ] `-insecure` 冒烟：日志 GL_VERSION / GL_CONTEXT_PROFILE_MASK；
-      固定管线可用性验证（不可用 → 触发 GL3 移植，见 shared TODO）。
+- [x] `-insecure` 冒烟：日志 GL_VERSION / GL_CONTEXT_PROFILE_MASK 已加入
+      （实机：`GL_VERSION=4.6.0 NVIDIA` / `profile_mask=0x0` → 兼容上下文，
+      固定管线可用；GL3 后端继续使用，GL2 后端保留为备选）。
 - [x] 命令通道 + 测试脚本（`ui open|close|toggle|tab|panel`/`dump`/`players`/
       `rage`/`aa`/`fl`/`bt`/`esp`/`glow`/`autowall`/`fov`/`bhop`/`trace`/
       `config save|load|delete|list|reset|export|import|folder [name]`；
@@ -130,6 +131,16 @@
   确认命中）+ auto 模式 miss 后 brute-force。
 - [x] **Ghidra 命名/注释落项目**：TraceRay/GetPointContents/GetPlayerInfo/
   CHLClient 37/38/MD5/GetSurfaceData 等函数与 vtable 标签已写入 Ghidra 项目。
+- [x] **性能（菜单掉帧）**：perf 分析定位到 RmlUi 全文档重排 60ms/次
+  （FPS 文本每 500ms 刷新触发；深层 flex 嵌套的 shrink-to-fit 递归，
+  实测每减少一层 nesting 成本减半）。修复：`#content-scroll`/`.section`
+  改 block、`.ctrl` 用 `flex: 1`（basis 0，父级不再测 max-content）、
+  `.combo` 改 block + 浮动 caret。重排尖峰 60→8-12ms；`Context::Update`
+  均值 1.3→0.5ms；Debug 构建下 GL3 渲染器每次绘制的 `glGetError`
+  改为仅 `ZEPHYRUS_GL3_LOG` 时检查，`Context::Render` CPU 1.3→0.6ms。
+  菜单打开时 overlay 每帧成本约 1.1ms（150fps 下），无掉帧感。
+  调试命令（命令通道）：`perf fps|anim on|off`、`style <selector> <prop>
+  <value|->`、`ui hide|show <id>`。
 - [ ] 游戏自身 `DoPostScreenEffects` 路径仍偶发 SIGSEGV（core：参数为
   截断指针 `0xef11fdc8`，位于游戏 glow 渲染循环，非 zephyrus 代码）；
   需用 **无注入 vanilla 对照**（Steam 运行时未启动时无法测试）或多轮观察确认。

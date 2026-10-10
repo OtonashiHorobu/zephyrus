@@ -542,6 +542,14 @@ enum class FramebufferAttachment { None, DepthStencil };
 static void CheckGLError(const char* operation_name)
 {
 #ifdef RMLUI_DEBUG
+	// Debug builds enable this per draw call, and several drivers make each
+	// glGetError a synchronous round trip. Only pay for it when the GL3 debug
+	// log is on.
+	if (!gl3_log_enabled())
+	{
+		(void)operation_name;
+		return;
+	}
 	GLenum error_code = glGetError();
 	if (error_code != GL_NO_ERROR)
 	{

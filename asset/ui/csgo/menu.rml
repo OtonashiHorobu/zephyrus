@@ -279,11 +279,9 @@
         #content-scroll
         {
             position: relative;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            /* Definite width so the whole tree reflows when the panel is
-               resized instead of keeping the previous (wider) layout. */
+            /* Block (not flex column): every extra flex level multiplies
+               RmlUi's shrink-to-fit measurement work during a relayout
+               (measured: each nesting level roughly halved the 60ms spike). */
             width: 100%;
         }
 
@@ -291,9 +289,7 @@
 
         .section
         {
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
+            display: block;
             margin-bottom: 22dp;
         }
         .section-title
@@ -356,8 +352,11 @@
             display: flex;
             align-items: center;
             justify-content: flex-end;
+            /* Basis 0: the parent flex line must not measure the control's
+               max-content (that is what recursed into nested flex). */
+            flex: 1;
+            min-width: 0;
             gap: 14dp;
-            flex-shrink: 0;
         }
         .value
         {
@@ -485,10 +484,9 @@
         .combo
         {
             position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10dp;
+            /* Block + floated caret: one less flex level (each nesting level
+               roughly halves RmlUi's relayout work, measured). */
+            display: block;
             min-width: 130dp;
             padding: 6dp 11dp;
             background: #1b1b1b;
@@ -510,6 +508,7 @@
         }
         .combo .caret
         {
+            float: right;
             color: #5c5c5c;
             font-size: 13dp;
             line-height: 13dp;

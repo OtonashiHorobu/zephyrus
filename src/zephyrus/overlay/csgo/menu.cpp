@@ -23,6 +23,9 @@
 
 namespace zephyrus::csgo::overlay {
 namespace {
+/// Mirrors `#caret`'s CSS animation (restored by `set_caret_animation`).
+constexpr const char *blink_animation{"blink 0.55s alternate infinite"};
+
 std::string format_number(float value, int decimals,
                           const std::string &suffix) {
     char buffer[64]{};
@@ -354,22 +357,69 @@ void menu::tick() noexcept {
     const auto now{std::chrono::steady_clock::now()};
     const auto elapsed{now - fps_window_};
     if (elapsed >= std::chrono::milliseconds{500}) {
-        const double seconds{
-            std::chrono::duration<double>(elapsed).count()};
-        const int fps{seconds > 0.0
-                          ? static_cast<int>(
-                                std::lround(static_cast<double>(fps_frames_) /
-                                            seconds))
-                          : 0};
-        if (Rml::Element *label{document_ != nullptr
-                                    ? document_->GetElementById("fps-label")
-                                    : nullptr};
-            label != nullptr) {
-            set_text(label, std::to_string(fps) + " FPS");
+        if (fps_enabled_) {
+            const double seconds{
+                std::chrono::duration<double>(elapsed).count()};
+            const int fps{seconds > 0.0
+                              ? static_cast<int>(
+                                    std::lround(static_cast<double>(fps_frames_) /
+                                                seconds))
+                              : 0};
+            if (Rml::Element *label{document_ != nullptr
+                                        ? document_->GetElementById("fps-label")
+                                        : nullptr};
+                label != nullptr) {
+                set_text(label, std::to_string(fps) + " FPS");
+            }
         }
         fps_frames_ = 0;
         fps_window_ = now;
     }
+}
+
+void menu::set_caret_animation(const bool enabled) noexcept {
+    if (document_ == nullptr) {
+        return;
+    }
+    if (Rml::Element *caret{document_->GetElementById("caret")};
+        caret != nullptr) {
+        caret->SetProperty("animation", enabled ? blink_animation
+                                                : static_cast<const char *>("none"));
+    }
+}
+
+void menu::set_element_visible(const std::string_view id,
+                                const bool visible) noexcept {
+    if (document_ == nullptr) {
+        return;
+    }
+    if (Rml::Element *element{document_->GetElementById(Rml::String{id})};
+        element != nullptr) {
+        if (visible) {
+            element->RemoveProperty("display");
+        } else {
+            element->SetProperty("display", "none");
+        }
+    }
+}
+
+void menu::set_style(const std::string_view selector,
+                     const std::string_view property,
+                     const std::string_view value) noexcept {
+    if (document_ == nullptr) {
+        return;
+    }
+    Rml::ElementList elements;
+    document_->QuerySelectorAll(elements, Rml::String{selector});
+    for (Rml::Element *element : elements) {
+        if (value.empty()) {
+            element->RemoveProperty(Rml::String{property});
+        } else {
+            element->SetProperty(Rml::String{property}, Rml::String{value});
+        }
+    }
+    ZEPHYRUS_INFO("menu: style '{}' {} = '{}' on {} element(s)", selector,
+                  property, value, elements.size());
 }
 
 void menu::set_viewport(const int width, const int height) noexcept {

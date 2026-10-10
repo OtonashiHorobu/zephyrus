@@ -551,6 +551,20 @@ void overlay::on_present() noexcept {
 
     menu_.tick();
 
+    // One-time GL context info: on this build NVIDIA reports profile_mask 0x0
+    // (compatibility-style context), so the fixed pipeline stays available.
+    static bool gl_info_logged{};
+    if (!gl_info_logged) {
+        gl_info_logged = true;
+        constexpr GLint gl_context_profile_mask{0x9126};
+        GLint profile_mask{};
+        glGetIntegerv(gl_context_profile_mask, &profile_mask);
+        ZEPHYRUS_INFO("csgo gl: version={} renderer={} profile_mask={:#x}",
+                      reinterpret_cast<const char *>(glGetString(GL_VERSION)),
+                      reinterpret_cast<const char *>(glGetString(GL_RENDERER)),
+                      profile_mask);
+    }
+
     rmlui_->update();
     Backend::BeginFrame();
     rmlui_->render();
