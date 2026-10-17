@@ -51,11 +51,6 @@ std::expected<game, std::string> game::create() noexcept {
     instance.entity_list_ = (*factory)("VClientEntityList003", nullptr);
     instance.engine_ = (*engine_factory)("VEngineClient014", nullptr);
     instance.engine_trace_ = (*engine_factory)("EngineTraceClient004", nullptr);
-    instance.cvar_ = (*engine_factory)("VEngineCvar007", nullptr);
-    // Prediction interfaces live in the client module; both are optional so
-    // a missing interface only disables `EnginePrediction`, not the hook set.
-    instance.prediction_ = (*factory)("VClientPrediction001", nullptr);
-    instance.game_movement_ = (*factory)("GameMovement001", nullptr);
     instance.physics_surface_props_ =
         (*factory)("VPhysicsSurfaceProps001", nullptr);
     if (instance.physics_surface_props_ == nullptr) {
@@ -92,12 +87,6 @@ std::expected<game, std::string> game::create() noexcept {
         }
         return std::unexpected{"client/engine interfaces unavailable: " +
                                missing};
-    }
-    if (instance.prediction_ == nullptr) {
-        ZEPHYRUS_WARN("VClientPrediction001 unavailable (prediction off)");
-    }
-    if (instance.game_movement_ == nullptr) {
-        ZEPHYRUS_WARN("GameMovement001 unavailable (prediction off)");
     }
     if (instance.physics_surface_props_ == nullptr) {
         ZEPHYRUS_WARN(
@@ -156,37 +145,6 @@ int game::max_clients() const noexcept {
         return 0;
     }
     return virtual_call<20, int>(engine_);
-}
-
-bool game::line_goes_through_smoke(const Vector &from,
-                                   const Vector &to) const noexcept {
-    if (!patterns_.has_value() ||
-        patterns_->line_goes_through_smoke == nullptr) {
-        return false;
-    }
-    using fn_type = bool (*)(Vector, Vector, short);
-    return reinterpret_cast<fn_type>(
-        const_cast<void *>(patterns_->line_goes_through_smoke))(from, to, 1);
-}
-
-bool game::is_other_enemy(const entity &first,
-                          const entity &second) const noexcept {
-    if (!patterns_.has_value() || patterns_->is_other_enemy == nullptr) {
-        return false;
-    }
-    using fn_type = bool (*)(void *, void *);
-    return reinterpret_cast<fn_type>(const_cast<void *>(
-        patterns_->is_other_enemy))(first.raw(), second.raw());
-}
-
-void game::set_abs_origin(const entity &target,
-                          const Vector &origin) const noexcept {
-    if (!patterns_.has_value() || patterns_->set_abs_origin == nullptr) {
-        return;
-    }
-    using fn_type = void (*)(void *, const Vector &);
-    reinterpret_cast<fn_type>(const_cast<void *>(patterns_->set_abs_origin))(
-        target.raw(), origin);
 }
 
 trace game::trace_ray(const Vector &from, const Vector &to,

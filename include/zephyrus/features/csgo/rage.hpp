@@ -57,7 +57,6 @@ class rage {
     struct rage_options {
         bool enabled{false};
         bool friendly_fire{false};
-        bool ignore_smoke{false};
         bool ignore_flash{false};
         bool no_recoil{true};
         /// Only aim at targets the engine can see (disables wallbangs even

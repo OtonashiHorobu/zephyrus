@@ -51,12 +51,10 @@
 
 ## F3. HvH v1 功能（Phase 3）
 
-- [x] Hooks：ClientMode `createMove`(25, 支持 sendPacket 覆写) / `overrideView`(19) /
-      `getViewModelFov`(36)；Client `frameStageNotify`(37，backtrack 记录)。
-- [x] `doPostScreenEffects`(45)：`skip_post_screen_effects`（去瞄准镜遮罩）。
-- [x] 其余 hooks：`shouldDrawFog`(18)/`dispatchUserMessage`(38) 已接；
-      `UpdateClientSideAnimation`（Linux vtable 索引 **286**，Ghidra 验证
-      主 vtable 0x22C7B00）hook 已启用，用于本地 real matrix 捕获。
+- [x] Hooks：ClientMode `createMove`(25, 支持 sendPacket 覆写) / `overrideView`(19)；
+      Client `frameStageNotify`(37，动画记录)。
+      **（第三轮已删除未核对项：getViewModelFov 36 / doPostScreenEffects 45 /
+      shouldDrawFog 18 / dispatchUserMessage 38 / UpdateClientSideAnimation 286。）**
 - [~] `EnginePrediction`（velocity/flags，参考 O&E）：完整实现
       （`features/csgo/prediction.*`，IPrediction 20/21、GameMovement 1）；
       受 `restoreEntityToPredictedFrame` 未逆向限制自动禁用（re-f3 B1）。
@@ -84,16 +82,16 @@
       brute-force；per-record 位置旋转。
 - [x] ESP v1（RmlUi 叠加层，独立于菜单开合）：盒子/血量/名字/武器/距离/snapline +
       可见/敌我着色；骨架待做。
-- [x] Glow（`GlowObjectManager`，敌人描边，血量/彩虹配色）。
-- [x] Visuals：no-flash（`m_flFlashMaxAlpha` 置零）、remove scope（跳过
-      `DoPostScreenEffects`）、no-fog（`ShouldDrawFog` hook）；no-smoke/
-      十字线等待做。
+- [x] ~~Glow~~ → 第三轮整体移除（`glowObjectManager` pattern 未核对，开启即崩）。
+- [x] Visuals：no-flash（`m_flFlashMaxAlpha` 置零）；remove scope / no-fog
+      第三轮移除（槽位未核对且行为错误：18 是 `return true` 桩、45 跳过
+      `DoPostScreenEffects` 不隐藏瞄准镜叠层）。
 - [x] Movement：bhop、auto-strafe、slow-walk（按键，overlay key capture）、
       movement fix（AA 改角后保持世界方向）。
-- [x] 菜单/配置：Rage/AA/Backtrack/Fakelag/Movement/ESP/Glow/Resolver 全部
+- [x] 菜单/配置：Rage/AA/Backtrack/Fakelag/Movement/ESP/Resolver 全部
       绑定到菜单并持久化到 `csgo/latest.toml`（`[features]`）；新增
       Weapons 页（按武器类别）、manual 按键捕获、desync/LBY 控件。
-      （`ZEPHYRUS_CSGO_*` 环境变量模式被 TOML 取代。）
+      （`ZEPHYRUS_CSGO_*` 环境变量模式被 TOML 取代。Glow 页第三轮移除。）
 
 ### 第二轮修复（2026-10-10，review + core 分析）
 
@@ -144,6 +142,38 @@
 - [ ] 游戏自身 `DoPostScreenEffects` 路径仍偶发 SIGSEGV（core：参数为
   截断指针 `0xef11fdc8`，位于游戏 glow 渲染循环，非 zephyrus 代码）；
   需用 **无注入 vanilla 对照**（Steam 运行时未启动时无法测试）或多轮观察确认。
+
+### 第三轮：RE 审计与删除（2026-10-10，用户报告 hook 疑似错误）
+
+用户报告：no scope overlay 无效、no fog 会隐藏 viewmodel、开 glow 崩溃、
+ESP 仍有错误位置的闪烁、计分板/kill feed 的 bot 名消失（不注入正常）。
+要求：未亲手在 Ghidra 核对过的 hook/pattern 全部删除。
+
+- [x] **ClientMode vtable 实测**：静态实例 `0x06e04200`，构造器 `0x00ff8b20`
+  装表 `0x022d14b0`；槽 17/18/29/14 = `return true` 桩（no-fog 用它返回
+  false 会连带隐藏 viewmodel）；槽 45 = glow 渲染（跳过它并不能隐藏瞄准镜
+  叠层）。详见 re-abi §11。
+- [x] **删除**：no-fog（18）、no-scope（45）、viewmodel FOV（36）、
+  `DispatchUserMessage`（38，只做 trace 日志）、`UpdateClientSideAnimation`
+  钩子（fake matrix 未实现）、glow 全模块 + `glowObjectManager` pattern、
+  prediction 全模块（依赖从未解析的 `client_state`/`restoreEntity…`，
+  实际恒禁用）、`SetAbsOrigin`、`line_goes_through_smoke`、`is_other_enemy`
+  及全部未使用 Osiris pattern（`view_render_beams`/`weapon_system`/
+  `player_resource_slot`/`planted_c4s`/`game_rules_slot`/`view_render`/
+  `send_clan_tag`/`send_datagram`）、entity 348/409/218。
+- [x] **ESP 幽灵框（错误位置闪烁）修复**：backtrack 的 `rewind` 曾把敌人的
+  abs origin / 模拟时间写到历史位置且从不恢复（未核对的 `SetAbsOrigin`
+  pattern 写操作）→ 射击后 ESP 会在旧位置画框。现只改 `cmd.tick_count`，
+  不再写实体。
+- [x] **队内判断改队伍号**（实体 vtable 128 已核对 `this+0x12C`），不再调用
+  未核对的 `isOtherEnemy`。
+- [x] **eye_position 改 netvar**：`origin + m_vecViewOffset[0]`；原 vtable 348
+  实为多参数函数，无参调用读寄存器垃圾。
+- [x] 保留并已在 Ghidra 核对的引用：entity 12/128/167/208/210、renderable 13
+  (SetupBones)、networkable 9/10、engine 8/18/19/20/37/78、CHLClient 37、
+  ClientMode 19/25、localPlayer pattern（唯一命中 `0x008f4e11`）。
+- [ ] bot 名消失回归：需实机确认（删除 `DispatchUserMessage` 钩子后复测
+  计分板 / kill feed）。
 
 ### F3 实机验证（2026-10-10）
 

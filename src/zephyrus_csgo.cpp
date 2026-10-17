@@ -12,9 +12,7 @@
 #include <zephyrus/features/csgo/backtrack.hpp>
 #include <zephyrus/features/csgo/esp.hpp>
 #include <zephyrus/features/csgo/fake_lag.hpp>
-#include <zephyrus/features/csgo/glow.hpp>
 #include <zephyrus/features/csgo/movement.hpp>
-#include <zephyrus/features/csgo/prediction.hpp>
 #include <zephyrus/features/csgo/rage.hpp>
 #include <zephyrus/features/csgo/resolver.hpp>
 #include <zephyrus/features/csgo/visuals.hpp>
@@ -74,11 +72,8 @@ std::optional<zephyrus::csgo::features::fake_lag> fake_lag;
 std::optional<zephyrus::csgo::features::backtrack> backtrack;
 std::optional<zephyrus::csgo::features::esp> esp;
 std::optional<zephyrus::csgo::features::resolver> resolver;
-std::optional<zephyrus::csgo::features::glow> glow;
 std::optional<zephyrus::csgo::features::animations> animations;
-std::optional<zephyrus::csgo::features::prediction> prediction;
 bool game_hooks_installed{};
-bool animation_hook_installed{};
 bool menu_refreshed{};
 std::mutex game_mutex;
 
@@ -123,9 +118,6 @@ void panic_disable_features() noexcept {
     if (esp) {
         esp->options().enabled = false;
     }
-    if (glow) {
-        glow->options().enabled = false;
-    }
     if (movement) {
         movement->options().bhop = false;
         movement->options().auto_strafe = false;
@@ -133,8 +125,6 @@ void panic_disable_features() noexcept {
     }
     if (visuals) {
         visuals->options().no_flash = false;
-        visuals->options().remove_scope = false;
-        visuals->options().remove_fog = false;
         visuals->options().fov_changer = false;
     }
     if (overlay != nullptr) {
@@ -223,18 +213,9 @@ void log_feature_state() noexcept {
     if (esp) {
         ZEPHYRUS_INFO("esp: enabled={}", esp->options().enabled);
     }
-    if (glow) {
-        ZEPHYRUS_INFO("glow: enabled={}", glow->options().enabled);
-    }
     if (visuals) {
-        ZEPHYRUS_INFO("visuals: noflash={} noscope={} nofog={} fov={}",
-                      visuals->options().no_flash,
-                      visuals->options().remove_scope,
-                      visuals->options().remove_fog, visuals->options().fov);
-    }
-    if (prediction && game.has_value()) {
-        ZEPHYRUS_INFO("prediction: available={}",
-                      zephyrus::csgo::features::prediction::available(*game));
+        ZEPHYRUS_INFO("visuals: noflash={} fov={}",
+                      visuals->options().no_flash, visuals->options().fov);
     }
     if (game.has_value()) {
         ZEPHYRUS_INFO("patterns: {} missing", game->resolved().missing);
@@ -333,12 +314,6 @@ void handle_command(const std::string_view line) noexcept {
                 parse_on_off(value, esp->options().enabled);
         }
         ZEPHYRUS_INFO("esp {}", esp->options().enabled ? "on" : "off");
-    } else if (name == "glow" && glow) {
-        if (!value.empty()) {
-            glow->options().enabled =
-                parse_on_off(value, glow->options().enabled);
-        }
-        ZEPHYRUS_INFO("glow {}", glow->options().enabled ? "on" : "off");
     } else if (name == "autowall" && rage) {
         if (!value.empty()) {
             rage->options().defaults.autowall =
@@ -511,8 +486,6 @@ void handle_command(const std::string_view line) noexcept {
                 static_cast<double>(result.endpos.y),
                 static_cast<double>(result.endpos.z), contents);
         }
-    } else if (name == "prediction") {
-        log_feature_state();
     } else {
         ZEPHYRUS_WARN("unknown command '{}'", line);
     }
@@ -579,9 +552,7 @@ void initialize_game() noexcept {
     backtrack.emplace();
     esp.emplace();
     resolver.emplace();
-    glow.emplace();
     animations.emplace();
-    prediction.emplace();
     if (rage.has_value()) {
         rage->set_resolver(&*resolver);
         rage->set_backtrack(&*backtrack);
@@ -589,9 +560,6 @@ void initialize_game() noexcept {
     }
     if (backtrack.has_value()) {
         backtrack->set_animations(&*animations);
-    }
-    if (anti_aim.has_value()) {
-        anti_aim->set_animations(&*animations);
     }
 }
 
@@ -635,14 +603,6 @@ void initialize_game() noexcept {
             movement->create_move(*game, cmd);
         }
 
-        // Run the engine's own movement so velocity/flags reflect this
-        // command; the entity is restored again at the end of the tick.
-        if (prediction &&
-            zephyrus::csgo::features::prediction::available(*game)) {
-            prediction->update(*game);
-            prediction->run(*game, cmd);
-        }
-
         // Ragebot first: it must see the player's real view (the anti-aim
         // would otherwise rotate the FOV base) and it sets the fire buttons
         // that fake lag and the anti-aim react to.
@@ -668,13 +628,7 @@ void initialize_game() noexcept {
             movement->fix_movement(cmd, angle_backup);
         }
 
-        if (prediction) {
-            prediction->restore(*game);
-        }
         return send;
-    };
-    client_mode_hooks->view_model_fov = [] {
-        return visuals ? visuals->view_model_fov() : 0.0F;
     };
     client_mode_hooks->frame_stage_notify = [](int stage) {
         if (!game.has_value()) {
@@ -683,32 +637,6 @@ void initialize_game() noexcept {
         if (animations) {
             animations->update(*game, stage);
         }
-        if (glow && stage == 5) {
-            // Render start: the glow pass runs later in the frame.
-            glow->update(*game);
-        }
-    };
-    client_mode_hooks->skip_post_screen_effects = [] {
-        if (!visuals || !visuals->options().remove_scope || !game.has_value()) {
-            return false;
-        }
-        const zephyrus::csgo::entity local{game->local_player()};
-        return local.valid() && local.is_scoped();
-    };
-    client_mode_hooks->skip_fog = [] {
-        return visuals.has_value() && visuals->options().remove_fog;
-    };
-    client_mode_hooks->user_message = [](int type, int size, const void *) {
-        ZEPHYRUS_TRACE("user message {} ({} bytes)", type, size);
-    };
-    client_mode_hooks->update_client_side_animation = [](void *self) {
-        if (!game.has_value() || !animations.has_value()) {
-            return;
-        }
-        if (self != game->local_player().raw()) {
-            return;
-        }
-        animations->update_local_animation();
     };
     if (auto result{
             client_mode_hooks->install(game->client_mode(), game->client())};
@@ -842,17 +770,10 @@ void probe_patterns() noexcept {
         std::string_view name;
         std::string_view pattern;
     };
-    // A subset of the Osiris csgo branch Linux pattern set, verified against
-    // build 1.38.8.1: every entry must resolve, a failure disables the
-    // corresponding feature instead of aborting.
+    // Only the finders that survived the RE audit (see patterns.cpp); a
+    // failure disables the corresponding feature instead of aborting.
     constexpr pattern_check checks[]{
         {zephyrus::csgo::client_module, "localPlayer", "83 FF FF 48 8B 05"},
-        {zephyrus::csgo::client_module, "glowObjectManager",
-         "E8 ? ? ? ? 4C 89 E7 8B 70 20"},
-        {zephyrus::csgo::client_module, "plantedC4s",
-         "48 8D 3D ? ? ? ? 42 C6 44 28"},
-        {zephyrus::csgo::engine_module, "splitScreen",
-         "C6 05 ? ? ? ? ? 48 89 05 ? ? ? ? 0F 84"},
     };
 
     for (const auto &check : checks) {
@@ -1214,11 +1135,6 @@ void install_overlay_when_ready() noexcept {
                                          if (backtrack)
                                              backtrack->options().enabled = v;
                                      });
-                    menu.bind_toggle(
-                        "cb-bt-smoke", defaults.ignore_smoke, [](bool v) {
-                            if (backtrack)
-                                backtrack->options().ignore_smoke = v;
-                        });
                     menu.bind_slider("sl-bt-limit",
                                      static_cast<float>(defaults.time_limit),
                                      [](float v) {
@@ -1248,38 +1164,6 @@ void install_overlay_when_ready() noexcept {
                                          if (visuals)
                                              visuals->options().no_flash = v;
                                      });
-                    menu.bind_toggle(
-                        "cb-vis-noscope", defaults.remove_scope, [](bool v) {
-                            if (visuals)
-                                visuals->options().remove_scope = v;
-                        });
-                    menu.bind_toggle("cb-vis-nofog", defaults.remove_fog,
-                                     [](bool v) {
-                                         if (visuals)
-                                             visuals->options().remove_fog = v;
-                                     });
-                }
-                if (glow.has_value()) {
-                    const auto &defaults{glow->options()};
-                    menu.bind_toggle("cb-glow-enabled", defaults.enabled,
-                                     [](bool v) {
-                                         if (glow)
-                                             glow->options().enabled = v;
-                                     });
-                    menu.bind_toggle("cb-glow-health", defaults.health_based,
-                                     [](bool v) {
-                                         if (glow)
-                                             glow->options().health_based = v;
-                                     });
-                    menu.bind_toggle("cb-glow-rainbow", defaults.rainbow,
-                                     [](bool v) {
-                                         if (glow)
-                                             glow->options().rainbow = v;
-                                     });
-                    menu.bind_combo("co-glow-style", defaults.style, [](int v) {
-                        if (glow)
-                            glow->options().style = v < 0 ? 0 : v;
-                    });
                 }
                 if (resolver.has_value()) {
                     const auto &defaults{resolver->options()};
@@ -1664,22 +1548,7 @@ void install_overlay_when_ready() noexcept {
                     // Retry next frame (failures are logged once).
                     return;
                 }
-                if (!animation_hook_installed && client_mode_hooks) {
-                    const zephyrus::csgo::entity local{game->local_player()};
-                    if (local.valid()) {
-                        if (auto result{
-                                client_mode_hooks->install_client_animation(
-                                    local.raw())};
-                            !result) {
-                            report("animation hook", result.error());
-                        } else {
-                            animation_hook_installed = true;
-                        }
-                    }
-                }
-                if (game_hooks_installed && animation_hook_installed) {
-                    candidate->on_ready = nullptr;
-                }
+                candidate->on_ready = nullptr;
             };
             candidate->key_event = [](int scancode, bool down) {
                 if (scancode > 0 &&
@@ -1782,7 +1651,6 @@ zephyrus_csgo_shutdown() noexcept {
         overlay_installer.join();
     }
     game_hooks_installed = false;
-    animation_hook_installed = false;
     menu_refreshed = false;
 
     // Restore the SDL2 pointer slots before the RmlUi runtime goes away.
@@ -1791,7 +1659,6 @@ zephyrus_csgo_shutdown() noexcept {
 
     // Restore the game hooks while the game code is still mapped.
     if (client_mode_hooks != nullptr) {
-        client_mode_hooks->uninstall_client_animation();
         client_mode_hooks->uninstall();
         client_mode_hooks.reset();
     }
@@ -1804,9 +1671,7 @@ zephyrus_csgo_shutdown() noexcept {
     backtrack.reset();
     esp.reset();
     resolver.reset();
-    glow.reset();
     animations.reset();
-    prediction.reset();
 
     app->shutdown();
     delete app;

@@ -795,7 +795,6 @@
             <div class="nav-item group-rage" id="nav-rage-weapons"><span class="glyph">&#9679;</span><span>Weapons</span></div>
             <div class="nav-item active group-visuals" id="nav-visuals-main"><span class="glyph">&#9679;</span><span>Main</span></div>
             <div class="nav-item group-visuals" id="nav-visuals-esp"><span class="glyph">&#9679;</span><span>Esp</span></div>
-            <div class="nav-item group-visuals" id="nav-visuals-glow"><span class="glyph">&#9679;</span><span>Glow</span></div>
             <div class="nav-item active group-misc" id="nav-misc-main"><span class="glyph">&#9679;</span><span>Main</span></div>
             <div class="nav-item group-misc" id="nav-misc-movement"><span class="glyph">&#9679;</span><span>Movement</span></div>
             <div class="nav-item active group-config" id="nav-config-main"><span class="glyph">&#9679;</span><span>Profiles</span></div>
@@ -893,7 +892,6 @@
                                 <div class="track"></div><div class="fill" id="fill-bt-limit"></div><div class="knob" id="knob-bt-limit"></div>
                             </div>
                         </div></div>
-                        <div class="row"><span class="label">Ignore smoke</span><div class="ctrl"><div class="checkbox" id="cb-bt-smoke"><span class="mark">&#10003;</span></div></div></div>
                     </div>
                 </section>
 
@@ -1168,8 +1166,6 @@
                 <section class="panel" id="panel-visuals-main">
                     <div class="section">
                         <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Removals</span><span class="rule"></span></div>
-                        <div class="row"><span class="label">No scope overlay</span><div class="ctrl"><div class="checkbox" id="cb-vis-noscope"><span class="mark">&#10003;</span></div></div></div>
-                        <div class="row"><span class="label">No fog</span><div class="ctrl"><div class="checkbox" id="cb-vis-nofog"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">No flash</span><div class="ctrl"><div class="checkbox" id="cb-vis-noflash"><span class="mark">&#10003;</span></div></div></div>
                     </div>
                 </section>
@@ -1187,28 +1183,6 @@
                         <div class="row"><span class="label">Snaplines</span><div class="ctrl"><div class="checkbox" id="cb-esp-snapline"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">Visible only</span><div class="ctrl"><div class="checkbox" id="cb-esp-visible"><span class="mark">&#10003;</span></div></div></div>
                         <div class="row"><span class="label">Teammates</span><div class="ctrl"><div class="checkbox" id="cb-esp-team"><span class="mark">&#10003;</span></div></div></div>
-                    </div>
-                </section>
-
-                <!-- ===================== VISUALS / GLOW ===================== -->
-                <section class="panel" id="panel-visuals-glow">
-                    <div class="section">
-                        <div class="section-title"><span>[</span><span class="idx">01</span><span>]</span><span>Glow</span><span class="rule"></span></div>
-                        <div class="row"><span class="label">Enabled</span><div class="ctrl"><div class="checkbox" id="cb-glow-enabled"><span class="mark">&#10003;</span></div></div></div>
-                        <div class="row"><span class="label">Style</span><div class="ctrl">
-                            <div class="combo" id="co-glow-style">
-                                <span class="text" id="co-glow-style-text">Default</span>
-                                <span class="caret">&#9660;</span>
-                                <div class="combo-popup" id="co-glow-style-popup">
-                                    <div class="combo-item selected" id="co-glow-style-0">Default</div>
-                                    <div class="combo-item" id="co-glow-style-1">Rim3d</div>
-                                    <div class="combo-item" id="co-glow-style-2">Edge</div>
-                                    <div class="combo-item" id="co-glow-style-3">Edge Pulse</div>
-                                </div>
-                            </div>
-                        </div></div>
-                        <div class="row"><span class="label">Health based</span><div class="ctrl"><div class="checkbox" id="cb-glow-health"><span class="mark">&#10003;</span></div></div></div>
-                        <div class="row"><span class="label">Rainbow</span><div class="ctrl"><div class="checkbox" id="cb-glow-rainbow"><span class="mark">&#10003;</span></div></div></div>
                     </div>
                 </section>
 

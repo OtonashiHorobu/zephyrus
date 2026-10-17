@@ -243,9 +243,101 @@ static_assert(offsetof(trace, all_solid) == 54 &&
 | `ITraceFilter` | 多加 `virtual ~trace_filter()` 使槽位错位 | 移除虚析构 |
 | `MD5_PseudoRandom` | 取 `digest+0`（实际 `digest+6`） | 功能整体移除（CS:GO 无法 no-spread） |
 | `CHLClient` 37/38 | 曾被怀疑；实测正确 | 保持 |
+| `ClientMode` 18（no-fog） | 桩函数 `return 1`，被当 `ShouldDrawFog` 用 | 钩子与功能删除（曾导致 viewmodel 消失） |
+| `ClientMode` 45（no-scope） | 跳过 `DoPostScreenEffects` 不隐藏瞄准镜叠层 | 钩子与功能删除 |
+| `SetAbsOrigin` pattern | 应用在 backtrack 里把敌人 origin 写到历史位置且不恢复 | 删除写回，只改 `cmd.tick_count`（修 ESP 幽灵框） |
+| `line_goes_through_smoke` / `is_other_enemy` | Osiris pattern，未核对 | 删除；队内判断改用队伍号（vtable 128，已核对） |
+| glow 模块（`glowObjectManager` pattern） | 未核对，开启即崩 | 模块、pattern、UI 全删 |
+| prediction 模块 | 依赖的 `client_state` / `restoreEntityToPredictedFrame` 从未解析（恒 null） | 模块删除（含 m_nPrediction* pattern） |
+| entity 348（`eye_position`） | 未核对；实为带参函数（RSI/RDX），无参调用读垃圾 | 改为 netvar 计算 `origin + m_vecViewOffset[0]` |
+| entity 409 / 218 | 未核对 / 基类 `return 0` | 删除（无使用） |
+| `UpdateClientSideAnimation` 钩子 | 只服务于未实现的 fake matrix | 删除 |
 
 **教训**：Osiris Linux 的 vtable 索引并非全部可信（至少 `IPhysicsSurfaceProps` 是错的）。
 凡是带复杂签名/输出指针的虚调用，上线前必须用 core 或 Ghidra 复核一次。
+
+---
+
+## 11. RE 审计：逐槽位核对记录（2026-10-10）
+
+### 11.1 `ClientModeCSNormal`
+
+* 静态实例 `0x06e04200`（`_INIT_438` @ `0x007d62b2` 调用构造器）；
+  全局槽 `DAT_06e078e8` 由 `FUN_00ff6cc0` 写入 `&DAT_06e04200`，
+  `CHLClient::vtable[10]`（`0x009862b0`）读取该全局。
+* 构造器 `0x00ff8b20` 写入 vtable **`0x022d14b0`**（另有子对象表
+  `[+8]=0x22d16b0`、`[+0x50]=0x22d16e0`、`[+0x58]=0x21cfa10`）。
+* 反汇编核对（`0x022d14b0`）：
+
+| 槽 | vaddr | 签名（实测） | 结论 |
+|---|---|---|---|
+| 14/17/18/29 | `0x009ab530` | `PUSH RBP; MOV EAX,1; RET` | 默认谓词 `return true`，**不是** `ShouldDrawFog` |
+| 19 | `0x009ad1b0` | `(this[ignored], void* setup)` 取单例后转发 | `OverrideView(CViewSetup*)`，保留 |
+| 25 | `0x009aba30` | 保存 `xmm0`(float) 与 `rsi`(ptr) 后转发 | `CreateMove(float, CUserCmd*)`，保留 |
+| 36 | `0x009ae060` | 无额外参数转发 | `GetViewModelFov()`；功能未证实，钩子删除 |
+| 45 | `0x00ff6f40` | `(this, param)` 调 `FUN_009aefb0`→`FUN_00a17fd0`→`FUN_00a1a990` | `DoPostScreenEffects`（glow 渲染）；钩子删除（no-scope 无效） |
+
+### 11.2 `CHLClient`（`VClient018`）
+
+vtable `0x021c12c8`（构造器 `_INIT_119`→`0x00985dd0`）：
+
+| 槽 | vaddr | 函数 |
+|---|---|---|
+| 37 | `0x0098bf80` | `FrameStageNotify(this, int)`（`switch(stage)` 0..8） |
+| 38 | `0x00986dc0` | `DispatchUserMessage` thunk（保存参数→`0x00b25fd0`→`0x00b25660`） |
+
+### 11.3 `C_CSPlayer` 对象布局（构造器 `0x00fd3740`）
+
+```
+[obj+0x00] = 0x22c7b00  主 vtable (C_CSPlayer)
+[obj+0x08] = 0x22c89b0  IClientRenderable 子对象 vtable
+[obj+0x10] = 0x22c8b30  IClientNetworkable 子对象 vtable
+```
+
+| 表 | 槽 | vaddr | 语义（反编译证据） |
+|---|---|---|---|
+| 主 | 12 | `0x008c1ef0` | `GetAbsOrigin` → `this+0xD8`（先调网络更新） |
+| 主 | 128 | `0x008bbe80` | 队伍号 → `*(int*)(this+0x12C)` |
+| 主 | 167 | `0x00a1ade0` | 生命值 → `*(int*)(this+0x138)` |
+| 主 | 208 | `0x0084fe20` | `IsAlive` → `*(char*)(this+0x297) == 0` |
+| 主 | 210 | `0x008fb5a0` | `IsPlayer` → `return 1` |
+| renderable | 13 | `0x00fe2620`→`0x00fe25d0` | `SetupBones(matrix*, max, mask, time)`（转发 `0x008a7ba0`） |
+| networkable | 9 | `0x008bbf30`→`0x008bbf00` | `IsDormant` → index!=-1 时读 `this+0x125` |
+| networkable | 10 | `0x008bbae0`→`0x008bbad0` | `GetIndex` → `*(int*)(this+0x94)` |
+| 武器表 | 551/552 | `0x10182f0`/`0x101d770` | `GetInaccuracy`/`GetSpread`（§7，武器名实测正常） |
+
+### 11.4 `VEngineClient014`（vtable `0x00e64038`）
+
+| 槽 | vaddr | 已核对语义 |
+|---|---|---|
+| 8 | `0x00e64078` | `GetPlayerInfo(int, void*)`，拷贝 0x158 字节 |
+| 18 | `0x003798f0` | `GetViewAngles(Vector*)`（写 3 个 float） |
+| 19 | `0x00379a00` | `SetViewAngles(const Vector*)`（含 NaN 检查） |
+| 20 | `0x003794f0` | `GetMaxClients()` → `CClientState+0x420` |
+| 37 | `0x00378670` | `WorldToScreenMatrix()` thunk（投影实测正常） |
+| 78 | `0x003795b0` | `GetNetworkChannel()` → `CClientState+0x128` |
+
+### 11.5 本地玩家 finder
+
+`83 FF FF 48 8B 05` 在 `client_client.so` 中**唯一**命中 `0x008f4e11`：
+`cmp edi,-1; mov rax,[rip+disp]` → 全局 `DAT_024847e8`；
+`FUN_008f4e10(index)` 即 `(&DAT_024847e8)[index]`，且
+`ClientModeCSNormal::CreateMove`（槽 25）以 `FUN_008f4e10(-1)` 取本地玩家。
+
+### 11.6 保留但仅行为验证（未重新反编译）
+
+* 武器 vtable 523/529（武器名、按类配置实测正常）。
+* `VClientEntityList003` 槽 3（ESP/rage 实体解析实测正常）。
+* `VEngineClient014` 槽 37（投影实测正常）。
+
+### 11.7 本次删除清单
+
+no-fog / no-scope / viewmodel FOV 钩子与 UI、glow 全模块、prediction 全模块、
+`DispatchUserMessage` 钩子（仅 trace 日志）、`UpdateClientSideAnimation` 钩子、
+`SetAbsOrigin`、`line_goes_through_smoke`、`is_other_enemy`、`view_render_beams`、
+`weapon_system`、`player_resource_slot`、`planted_c4s`、`game_rules_slot`、
+`view_render`、`send_clan_tag`、`send_datagram`、所有 prediction pattern、
+entity 348/409/218。
 
 ---
 

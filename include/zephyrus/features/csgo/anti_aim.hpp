@@ -49,8 +49,6 @@ class anti_aim {
         return options_;
     }
 
-    void set_animations(animations *value) noexcept { animations_ = value; }
-
     /// `send` is the send-packet decision for this command (from fake lag);
     /// `original_angles` is the view the player had before the ragebot ran.
     /// Like OsirisAndExtra, the anti-aim leaves a command that the ragebot
@@ -76,7 +74,6 @@ class anti_aim {
                                            const Vector &angles) noexcept;
 
     anti_aim_options options_{};
-    animations *animations_{};
     float spin_base_{};
     float last_yaw_{};
     bool jitter_state_{};

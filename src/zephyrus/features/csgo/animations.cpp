@@ -29,10 +29,6 @@ void animations::reset() noexcept {
         entry = {};
     }
     local_index_ = 0;
-    has_fake_matrix_ = false;
-    has_real_matrix_ = false;
-    fake_requested_ = false;
-    updating_fake_ = false;
 }
 
 bool animations::capture(const game &game, const int index,
@@ -119,25 +115,5 @@ void animations::update(const game &game, const int frame_stage) noexcept {
         }
         (void)capture(game, index, players_[static_cast<std::size_t>(index)]);
     }
-}
-
-void animations::update_local_animation() noexcept {
-    // Invoked from the `UpdateClientSideAnimation` hook for the local player.
-    // The matrix capture only needs the render bone cache, which is available
-    // on every build; the fake pose needs the AnimState/abs-angle offsets and
-    // is skipped until they were recovered.
-    const animation_player &self{local()};
-    if (!self.has_matrix) {
-        return;
-    }
-    std::memcpy(real_matrix_.data(), self.matrix, sizeof(real_matrix_));
-    has_real_matrix_ = true;
-
-    if (!updating_fake_ && !fake_requested_) {
-        return;
-    }
-    // Fake matrix generation lands here once `csgo/offsets.hpp` carries the
-    // AnimState layout: force the foot yaw, rebuild the bones, restore.
-    fake_requested_ = false;
 }
 } // namespace zephyrus::csgo::features

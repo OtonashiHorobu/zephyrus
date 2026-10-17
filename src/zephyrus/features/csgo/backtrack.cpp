@@ -16,22 +16,11 @@ namespace {
     return static_cast<int>(0.5F + time / game.interval_per_tick());
 }
 
-[[nodiscard]] float cvar_float(const game &game, const char *name,
-                               const float fallback) noexcept {
-    if (game.cvar() == nullptr) {
-        return fallback;
-    }
-    using find_var_fn = void *(*)(void *, const char *);
-    auto **cvar_vtable{*reinterpret_cast<void ***>(game.cvar())};
-    void *variable{
-        reinterpret_cast<find_var_fn>(cvar_vtable[15])(game.cvar(), name)};
-    if (variable == nullptr) {
-        return fallback;
-    }
-    using get_float_fn = float (*)(void *);
-    auto **variable_vtable{*reinterpret_cast<void ***>(variable)};
-    return reinterpret_cast<get_float_fn>(variable_vtable[15])(variable);
-}
+/// Default client interpolation (`cl_interp` 0.031) used for the tick
+/// rewind. The cvar lookup and the network-channel latency check that Osiris
+/// uses were removed: their vtable slots could not be verified against this
+/// build, and the record age is already bounded by `time_limit`.
+constexpr float default_interp{0.031F};
 
 [[nodiscard]] animation_record
 live_record(const animation_player &animation) noexcept {
@@ -53,42 +42,6 @@ live_record(const animation_player &animation) noexcept {
 } // namespace
 
 void backtrack::reset() noexcept { animations_ = nullptr; }
-
-float backtrack::get_lerp(const game &game) const noexcept {
-    const float interp{cvar_float(game, "cl_interp", 0.031F)};
-    const float ratio{cvar_float(game, "cl_interp_ratio", 2.0F)};
-    const float min_ratio{cvar_float(game, "sv_client_min_interp_ratio", 1.0F)};
-    const float max_ratio{cvar_float(game, "sv_client_max_interp_ratio", 6.0F)};
-    const float max_update{cvar_float(game, "sv_maxupdaterate", 128.0F)};
-    const float update{cvar_float(game, "cl_updaterate", 128.0F)};
-    const float clamped_ratio{std::clamp(ratio, min_ratio, max_ratio)};
-    const float rate{max_update > 0.0F ? max_update : update};
-    return std::max(interp, clamped_ratio / (rate > 0.0F ? rate : 128.0F));
-}
-
-bool backtrack::valid(const game &game, const float simtime) const noexcept {
-    if (game.engine() == nullptr) {
-        return false;
-    }
-    using get_network_fn = void *(*)(void *);
-    auto **engine_vtable{*reinterpret_cast<void ***>(game.engine())};
-    void *network{
-        reinterpret_cast<get_network_fn>(engine_vtable[78])(game.engine())};
-    if (network == nullptr) {
-        return false;
-    }
-    using get_latency_fn = float (*)(void *, int);
-    auto **network_vtable{*reinterpret_cast<void ***>(network)};
-    const auto latency_0{
-        reinterpret_cast<get_latency_fn>(network_vtable[9])(network, 0)};
-    const auto latency_1{
-        reinterpret_cast<get_latency_fn>(network_vtable[9])(network, 1)};
-    const float max_unlag{cvar_float(game, "sv_maxunlag", 1.0F)};
-    const float delta{
-        std::clamp(latency_0 + latency_1 + get_lerp(game), 0.0F, max_unlag) -
-        (game.server_time() - simtime)};
-    return std::abs(delta) <= 0.2F;
-}
 
 backtrack_target backtrack::select(const game &game, const user_cmd &cmd,
                                    const entity &target,
@@ -139,9 +92,6 @@ backtrack_target backtrack::select(const game &game, const user_cmd &cmd,
         if (server_time - record.simulation_time > max_age) {
             break; // deque is newest-first: older entries only get worse
         }
-        if (!valid(game, record.simulation_time)) {
-            continue;
-        }
         const float score{score_of(record)};
         if (score < best_score) {
             best_score = score;
@@ -150,12 +100,6 @@ backtrack_target backtrack::select(const game &game, const user_cmd &cmd,
     }
 
     if (best_record != nullptr) {
-        // Smoke is checked once for the winning record instead of for every
-        // history entry (a trace per record per player would be too costly).
-        if (!options_.ignore_smoke &&
-            game.line_goes_through_smoke(eye, best_record->origin)) {
-            return result;
-        }
         result.record = *best_record;
         result.historical = true;
     }
@@ -167,10 +111,7 @@ void backtrack::rewind(const game &game, user_cmd &cmd,
     if (!target.historical || !target.target.valid()) {
         return;
     }
-
-    game.set_abs_origin(target.target, target.origin());
-    target.target.set_simulation_time(target.simulation_time());
-    cmd.tick_count =
-        time_to_ticks(game, target.simulation_time() + get_lerp(game));
+    cmd.tick_count = time_to_ticks(game, target.simulation_time()) +
+                     time_to_ticks(game, default_interp);
 }
 } // namespace zephyrus::csgo::features

@@ -48,14 +48,6 @@ class game {
     [[nodiscard]] void *engine() const noexcept { return engine_; }
     /// `EngineTraceClient004`.
     [[nodiscard]] void *engine_trace() const noexcept { return engine_trace_; }
-    /// `VEngineCvar007`.
-    [[nodiscard]] void *cvar() const noexcept { return cvar_; }
-    /// `VClientPrediction001` (client module).
-    [[nodiscard]] void *prediction() const noexcept { return prediction_; }
-    /// `GameMovement001` (client module).
-    [[nodiscard]] void *game_movement() const noexcept {
-        return game_movement_;
-    }
     /// `VPhysicsSurfaceProps001` (client module), if the game exposes it.
     [[nodiscard]] void *physics_surface_props() const noexcept {
         return physics_surface_props_;
@@ -69,14 +61,6 @@ class game {
     [[nodiscard]] entity get_entity(int index) const noexcept;
     [[nodiscard]] entity local_player() const noexcept;
     [[nodiscard]] int max_clients() const noexcept;
-
-    // --- engine helpers ---
-    [[nodiscard]] bool line_goes_through_smoke(const Vector &from,
-                                               const Vector &to) const noexcept;
-    [[nodiscard]] bool is_other_enemy(const entity &first,
-                                      const entity &second) const noexcept;
-    void set_abs_origin(const entity &target,
-                        const Vector &origin) const noexcept;
 
     /// `IEngineTrace::TraceRay` with an optional entity to skip (`nullptr`
     /// hits everything).
@@ -111,9 +95,6 @@ class game {
     void *global_vars_{};
     void *engine_{};
     void *engine_trace_{};
-    void *cvar_{};
-    void *prediction_{};
-    void *game_movement_{};
     void *physics_surface_props_{};
     std::optional<patterns> patterns_{};
 };

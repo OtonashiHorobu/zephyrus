@@ -186,7 +186,7 @@ autowall_result autowall::scan(const game &game, const entity &attacker,
         if (!friendly_fire && hit.entity != nullptr) {
             const entity hit_entity{hit.entity};
             if (hit_entity.valid() && hit_entity.is_player() &&
-                !game.is_other_enemy(hit_entity, attacker)) {
+                hit_entity.team_number() == attacker.team_number()) {
                 return result;
             }
         }

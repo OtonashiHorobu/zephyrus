@@ -12,21 +12,20 @@
 
 namespace zephyrus::csgo::features {
 /// Visual helpers driven from the `ClientMode` hooks.
+///
+/// The no-scope/no-fog hooks were removed: their vtable slots could not be
+/// verified against this build (slot 18 is a plain `return true` predicate and
+/// skipping `DoPostScreenEffects` does not hide the scope overlay), and both
+/// mutations were unsafe. Only the verified `OverrideView` hook (world FOV)
+/// and the netvar-based no-flash remain.
 class visuals {
   public:
     struct visuals_options {
-        /// Override the world FOV (`OverrideView`).
+        /// Override the world FOV (`OverrideView`, verified slot 19).
         bool fov_changer{false};
         float fov{90.0F};
-        /// Override the view-model FOV (`GetViewModelFov`).
-        bool view_model_fov{false};
-        float view_model_fov_value{68.0F};
-        /// Keep the flash overlay fully transparent.
+        /// Keep the flash overlay fully transparent (`m_flFlashMaxAlpha`).
         bool no_flash{false};
-        /// Skip the scope overlay while zoomed (`DoPostScreenEffects`).
-        bool remove_scope{false};
-        /// Skip the world fog (`ShouldDrawFog`).
-        bool remove_fog{false};
     };
 
     [[nodiscard]] visuals_options &options() noexcept { return options_; }
@@ -38,9 +37,6 @@ class visuals {
 
     /// Zero the local player's flash alpha (called every command).
     void apply_no_flash(const game &game) const noexcept;
-
-    /// > 0 replaces the engine's view-model FOV; 0 keeps the original.
-    [[nodiscard]] float view_model_fov() const noexcept;
 
   private:
     visuals_options options_{};

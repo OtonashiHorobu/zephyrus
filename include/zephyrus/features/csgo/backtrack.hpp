@@ -32,14 +32,19 @@ struct backtrack_target {
 };
 
 /// Backtrack: keeps a short history per player (through `animations`) and on
-/// shot rewinds the best record and the command tick so the server accepts the
-/// shot at the older position.
+/// shot rewinds the command tick so the server accepts the shot at the older
+/// position.
+///
+/// The entity itself is never mutated: the previous `SetAbsOrigin` rewind
+/// wrote the historical position into the live entity (an unverified pattern
+/// call) and made the ESP draw the box of that entity at the old position
+/// until the next interpolation update.
 class backtrack {
   public:
     struct backtrack_options {
         bool enabled{false};
-        bool ignore_smoke{false};
-        /// Record lifetime in milliseconds.
+        /// Record lifetime in milliseconds (do not raise above ~200ms: the
+        /// server rejects lag compensation outside `sv_maxunlag`).
         int time_limit{200};
     };
 
@@ -57,15 +62,12 @@ class backtrack {
                                           const entity &target,
                                           const Vector &punch) const noexcept;
 
-    /// Rewind the entity and the command tick for the chosen record.
+    /// Rewind the command tick for the chosen record.
     void rewind(const game &game, user_cmd &cmd,
                 const backtrack_target &target) const noexcept;
     void reset() noexcept;
 
   private:
-    [[nodiscard]] float get_lerp(const game &game) const noexcept;
-    [[nodiscard]] bool valid(const game &game, float simtime) const noexcept;
-
     backtrack_options options_{};
     animations *animations_{};
 };

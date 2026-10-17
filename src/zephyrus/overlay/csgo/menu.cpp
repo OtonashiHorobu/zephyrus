@@ -169,7 +169,6 @@ void menu::initialize(Rml::ElementDocument &document) noexcept {
         {"nav-rage-weapons", "rage-weapons"},
         {"nav-visuals-main", "visuals-main"},
         {"nav-visuals-esp", "visuals-esp"},
-        {"nav-visuals-glow", "visuals-glow"},
         {"nav-misc-main", "misc-main"},
         {"nav-misc-movement", "misc-movement"},
         {"nav-config-main", "config-main"},

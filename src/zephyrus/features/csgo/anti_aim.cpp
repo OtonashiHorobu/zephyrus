@@ -146,7 +146,7 @@ void anti_aim::run(const game &game, user_cmd &cmd, const bool send,
                 const entity target{game.get_entity(index)};
                 if (!target.valid() || target.raw() == local.raw() ||
                     target.is_dormant() || !target.is_alive() ||
-                    !game.is_other_enemy(target, local) ||
+                    target.team_number() == local.team_number() ||
                     target.gun_game_immunity()) {
                     continue;
                 }
@@ -230,8 +230,5 @@ void anti_aim::run(const game &game, user_cmd &cmd, const bool send,
 
     cmd.viewangles.y = final_yaw;
     last_yaw_ = final_yaw;
-    if (animations_ != nullptr) {
-        animations_->set_fake_angles(cmd.viewangles.x, final_yaw);
-    }
 }
 } // namespace zephyrus::csgo::features

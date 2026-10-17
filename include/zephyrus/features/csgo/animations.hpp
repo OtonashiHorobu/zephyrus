@@ -74,52 +74,11 @@ class animations {
     }
     [[nodiscard]] int local_index() const noexcept { return local_index_; }
 
-    /// Local player real/fake matrices (valid after the first
-    /// `UpdateClientSideAnimation` pass; empty while the Linux AnimState
-    /// offsets are unknown).
-    [[nodiscard]] bool has_fake_matrix() const noexcept {
-        return has_fake_matrix_;
-    }
-    [[nodiscard]] const matrix3x4 *fake_matrix() const noexcept {
-        return fake_matrix_.data();
-    }
-    [[nodiscard]] bool has_real_matrix() const noexcept {
-        return has_real_matrix_;
-    }
-    [[nodiscard]] const matrix3x4 *real_matrix() const noexcept {
-        return real_matrix_.data();
-    }
-
-    /// Invoked from the `UpdateClientSideAnimation` hook. Rebuilds the fake
-    /// matrix by forcing the AnimState to the anti-aim yaw; the real matrix is
-    /// captured first.
-    void update_local_animation() noexcept;
-
-    /// Queue the fake angles for the next animation update (called from
-    /// `CreateMove` after the anti-aim ran).
-    void set_fake_angles(float pitch, float yaw) noexcept {
-        fake_pitch_ = pitch;
-        fake_yaw_ = yaw;
-        fake_requested_ = true;
-    }
-    [[nodiscard]] bool fake_requested() const noexcept {
-        return fake_requested_;
-    }
-    [[nodiscard]] float fake_yaw() const noexcept { return fake_yaw_; }
-
   private:
     [[nodiscard]] bool capture(const game &game, int index,
                                animation_player &out) const noexcept;
 
     std::array<animation_player, 65> players_{};
     int local_index_{};
-    std::array<matrix3x4, 256> fake_matrix_{};
-    std::array<matrix3x4, 256> real_matrix_{};
-    bool has_fake_matrix_{};
-    bool has_real_matrix_{};
-    bool fake_requested_{};
-    bool updating_fake_{};
-    float fake_pitch_{};
-    float fake_yaw_{};
 };
 } // namespace zephyrus::csgo::features

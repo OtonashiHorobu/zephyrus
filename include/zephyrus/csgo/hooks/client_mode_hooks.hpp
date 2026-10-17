@@ -14,15 +14,19 @@
 #include <functional>
 
 namespace zephyrus::csgo::hooks {
-/// Inline hooks on the `ClientMode` virtual methods.
+/// Inline hooks on the `ClientMode` / `CHLClient` virtual methods.
 ///
-/// The targets are read from the live vtable and patched in place, so every
-/// call (from the engine or the game) reaches the callbacks. Linux indices
-/// come from the Osiris csgo branch (its Windows counterparts in comments):
-///   overrideView      19 (18)
-///   createMove        25 (24)
-///   getViewModelFov   36 (35)
-/// and `Client::frameStageNotify` at 37 (36).
+/// Only slots that were verified against this exact build
+/// (`client_client.so`, 1.38.8.1 linux64) are hooked. Ghidra evidence:
+///   * `ClientModeCSNormal` constructor at `0x00ff8b20` installs the vtable
+///     `0x022d14b0` on the static instance at `0x06e04200` (see
+///     `doc/csgo-re-abi.md` §11).
+///   * slot 19 = `OverrideView(CViewSetup*)`: takes a single pointer and
+///     forwards it to the view subsystem.
+///   * slot 25 = `CreateMove(float, CUserCmd*)`: saves the xmm0 float and the
+///     rsi pointer, then forwards to the input subsystem.
+///   * `CHLClient` vtable `0x021c12c8`, slot 37 (`0x0098bf80`) =
+///     `FrameStageNotify(int)` (`switch(stage)` 0..8).
 class client_mode_hooks {
   public:
     /// Called after the original `OverrideView` so it may adjust the setup.
@@ -31,43 +35,16 @@ class client_mode_hooks {
     /// The returned value is the send-packet state (fake lag suppresses it);
     /// the original state is passed in.
     std::function<bool(user_cmd &, bool original_send)> create_move;
-    /// Return > 0 to override the view-model FOV.
-    std::function<float()> view_model_fov;
-    /// Called from `Client::FrameStageNotify` (Linux index 37).
+    /// Called from `Client::FrameStageNotify` (verified slot 37).
     std::function<void(int stage)> frame_stage_notify;
-    /// Return true to skip the original `DoPostScreenEffects` (Linux index
-    /// 45), e.g. to remove the scope overlay.
-    std::function<bool()> skip_post_screen_effects;
-    /// Return true to skip drawing the world fog (`ShouldDrawFog`, Linux
-    /// index 18).
-    std::function<bool()> skip_fog;
-    /// Called after the original `Client::DispatchUserMessage` (Linux index
-    /// 38) with (type, size, data).
-    std::function<void(int, int, const void *)> user_message;
-    /// Called after the original `C_CSPlayer::UpdateClientSideAnimation`
-    /// (entity vtable; only installed when the Linux index is known).
-    std::function<void(void *)> update_client_side_animation;
 
     [[nodiscard]] hook::result_type install(void *client_mode,
                                             void *client = nullptr) noexcept;
     void uninstall() noexcept;
 
-    /// Install the entity vtable hook (needs a live player entity to read the
-    /// vtable from). Returns an empty result while the Linux vtable index is
-    /// unknown.
-    [[nodiscard]] hook::result_type
-    install_client_animation(void *local_player) noexcept;
-    void uninstall_client_animation() noexcept;
-
   private:
     hook::function_hook<void(void *, view_setup *)> override_view_hook_{};
     hook::function_hook<bool(void *, float, user_cmd *)> create_move_hook_{};
-    hook::function_hook<float(void *)> view_model_fov_hook_{};
     hook::function_hook<void(void *, int)> frame_stage_notify_hook_{};
-    hook::function_hook<void(void *, int)> post_screen_effects_hook_{};
-    hook::function_hook<bool(void *)> should_draw_fog_hook_{};
-    hook::function_hook<bool(void *, int, int, int, const void *)>
-        dispatch_user_message_hook_{};
-    hook::function_hook<void(void *)> client_animation_hook_{};
 };
 } // namespace zephyrus::csgo::hooks

@@ -178,10 +178,8 @@ add_library(zephyrus-csgo-core STATIC
     src/zephyrus/features/csgo/backtrack.cpp
     src/zephyrus/features/csgo/esp.cpp
     src/zephyrus/features/csgo/fake_lag.cpp
-    src/zephyrus/features/csgo/glow.cpp
     src/zephyrus/features/csgo/hitchance.cpp
     src/zephyrus/features/csgo/movement.cpp
-    src/zephyrus/features/csgo/prediction.cpp
     src/zephyrus/features/csgo/rage.cpp
     src/zephyrus/features/csgo/resolver.cpp
     src/zephyrus/features/csgo/visuals.cpp

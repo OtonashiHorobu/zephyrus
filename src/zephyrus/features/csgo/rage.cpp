@@ -187,7 +187,8 @@ void rage::run(const game &game, user_cmd &cmd) noexcept {
             target.gun_game_immunity()) {
             continue;
         }
-        if (!game.is_other_enemy(target, local) && !options_.friendly_fire) {
+        if (target.team_number() == local.team_number() &&
+            !options_.friendly_fire) {
             continue;
         }
 
@@ -229,10 +230,6 @@ void rage::run(const game &game, user_cmd &cmd) noexcept {
                 eye, position, cmd.viewangles + punch)};
             const float fov{std::hypot(angle.x, angle.y)};
             if (fov >= profile.fov) {
-                continue;
-            }
-            if (!options_.ignore_smoke &&
-                game.line_goes_through_smoke(eye, position)) {
                 continue;
             }
 

@@ -354,25 +354,27 @@ class entity {
         return virtual_call<210, bool>(self_);
     }
     [[nodiscard]] bool is_alive() const noexcept {
+        // Verified: `return *(char*)(this + 0x297) == 0` (m_lifeState).
         return virtual_call<208, bool>(self_);
     }
-    [[nodiscard]] bool is_weapon() const noexcept {
-        return virtual_call<218, bool>(self_);
-    }
     [[nodiscard]] int health() const noexcept {
+        // Verified: `return *(int*)(this + 0x138)` (m_iHealth).
         return virtual_call<167, int>(self_);
     }
     [[nodiscard]] int team_number() const noexcept {
+        // Verified: `return *(int*)(this + 0x12C)` (m_iTeamNum).
         return virtual_call<128, int>(self_);
     }
     [[nodiscard]] const Vector &abs_origin() const noexcept {
+        // Verified: returns `this + 0xD8` after the network update helper.
         return virtual_call<12, const Vector &>(self_);
     }
+    /// Eye position computed from netvars (`m_vecViewOffset[0]`); the entity
+    /// vtable slot that used to be called here could not be verified against
+    /// this build and was removed.
     [[nodiscard]] Vector eye_position() const noexcept {
-        return virtual_call<348, Vector>(self_);
-    }
-    [[nodiscard]] Vector aim_punch() const noexcept {
-        return virtual_call<409, Vector>(self_);
+        return abs_origin() +
+               netvar<Vector>("CBasePlayer->m_vecViewOffset[0]"_nv);
     }
     [[nodiscard]] entity active_weapon() const noexcept {
         return entity{virtual_call<331, entity_pod *>(self_)};
