@@ -1,54 +1,66 @@
-# zephyrus TODO — shared（CS:GO 公共层）
+# zephyrus TODO — shared (CS:GO shared layer)
 
-> 本分支（`csgo`）只维护 CS:GO 及其公共层；ACR 已拆到 `acr` 分支并冻结，
-> 见 [BRANCHES.md](../BRANCHES.md)。CS:GO 专属条目见 [todo-csgo.md](todo-csgo.md)，
-> 总体计划见 [csgo-port-plan.md](csgo-port-plan.md)。
-> 状态：`[x]` 完成 · `[~]` 进行中 · `[ ]` 未开始
+> This branch (`csgo`) only maintains CS:GO and its shared layer; ACR has been
+> split off into the `acr` branch and frozen, see [BRANCHES.md](../BRANCHES.md).
+> CS:GO-specific items are in [todo-csgo.md](todo-csgo.md), the overall plan is
+> in [csgo-port-plan.md](csgo-port-plan.md).
+> Status: `[x]` done · `[~]` in progress · `[ ]` not started
 
-## S1. 渲染后端
+## S1. Render backend
 
-- [x] `rmlui_manager` 通过 `Backend::Initialize` / `Backend::ContextAlive` 与具体
-      SDL 版本解耦；`init_impl` / `shutdown_impl` 只调用 Backend API。
-- [x] 使用官方 RmlUi GL3 渲染接口；每帧保存/恢复宿主的 GL 状态。
-- [~] 全 GL 状态审计：program、VAO、depth test/mask、cull、active texture、
-      矩阵、blend/scissor。常用状态已覆盖，仍需逐项对照游戏渲染路径。
-- [ ] `backend_mode` 语义整理：当前只会用到 `injected`，`standalone` 枚举仍保留。
+- [x] `rmlui_manager` is decoupled from the concrete SDL version through
+      `Backend::Initialize` / `Backend::ContextAlive`; `init_impl` /
+      `shutdown_impl` only call the Backend API.
+- [x] Use the official RmlUi GL3 render interface; save/restore the host's GL
+      state every frame.
+- [~] Full GL state audit: program, VAO, depth test/mask, cull, active texture,
+      matrices, blend/scissor. The common states are covered, but they still
+      need to be checked item by item against the game's render path.
+- [ ] `backend_mode` semantics cleanup: only `injected` is used right now, the
+      `standalone` enum is still kept.
 
 ## S2. SDL2
 
-- [x] `include/zephyrus/sdl2/sdl2.hpp` + `src/zephyrus/sdl2/sdl2.cpp`：函数表
-      （`dlopen("libSDL2-2.0.so.0", RTLD_NOLOAD | RTLD_LAZY)`）。
-- [x] `SDL_PollEvent` / `SDL_GL_SwapWindow` 的 `FF 25 rel32` 指针槽替换，
-      并保留 inline hook 回退。
-- [x] `system_interface_sdl2`：光标、剪贴板、时间、SDL2 key → Rml key 映射。
-- [x] `backend_sdl2_gl3.cpp`：注入模式初始化 + `ProcessEvents`（SDL2 事件路由）。
+- [x] `include/zephyrus/sdl2/sdl2.hpp` + `src/zephyrus/sdl2/sdl2.cpp`: function
+      table (`dlopen("libSDL2-2.0.so.0", RTLD_NOLOAD | RTLD_LAZY)`).
+- [x] `FF 25 rel32` pointer-slot replacement for `SDL_PollEvent` /
+      `SDL_GL_SwapWindow`, with the inline-hook fallback kept.
+- [x] `system_interface_sdl2`: cursor, clipboard, time, SDL2 key → Rml key
+      mapping.
+- [x] `backend_sdl2_gl3.cpp`: injected-mode initialization + `ProcessEvents`
+      (SDL2 event routing).
 
-## S3. Hook 基础
+## S3. Hook basics
 
-- [x] `hook::pointer_slot`：读取 / 替换 / 还原 `FF 25 rel32` 指针槽；不满足
-      特征时报错并回退 inline hook。
-- [x] 单测：`test/zephyrus/hook/test_pointer_slot.cpp`。
-- [ ] `hook::vmt`（可选）：VMT 拷贝 + 交换，仅在 inline hook 不合适时使用。
+- [x] `hook::pointer_slot`: read / replace / restore `FF 25 rel32` pointer
+      slots; reports an error and falls back to an inline hook when the
+      signature does not match.
+- [x] Unit test: `test/zephyrus/hook/test_pointer_slot.cpp`.
+- [ ] `hook::vmt` (optional): vtable copy + swap, used only when an inline hook
+      is not suitable.
 
-## S4. 菜单通用机制
+## S4. Generic menu mechanics
 
-- [ ] 从 `overlay/csgo/menu.cpp` 抽出 `overlay/menu_base`：控件绑定
-      （checkbox/slider/combo/keybind）、tab/sidebar 导航、拖动/缩放、滚动、
-      popup 定位、config 列表 UI、`ProcessEvent`。
-- [ ] keybind 名称表从 `overlay/csgo/menu.cpp` 移到公共层（SDL2 scancode）。
+- [ ] Extract `overlay/menu_base` from `overlay/csgo/menu.cpp`: widget binding
+      (checkbox/slider/combo/keybind), tab/sidebar navigation, drag/resize,
+      scrolling, popup positioning, config list UI, `ProcessEvent`.
+- [ ] Move the keybind name table out of `overlay/csgo/menu.cpp` into the shared
+      layer (SDL2 scancode).
 
-## S5. 配置通用层
+## S5. Generic config layer
 
-- [x] `config::document` 保持通用；CS:GO 使用
-      `~/.config/zephyrus/csgo/{latest.toml,profiles}`，改动防抖后自动保存。
-- [ ] 命令通道 poll 逻辑抽成 `overlay::command_channel`（路径、一行一命令），
-      由 CS:GO 注册自己的命令处理器。
+- [x] `config::document` stays generic; CS:GO uses
+      `~/.config/zephyrus/csgo/{latest.toml,profiles}`, autosaved after changes
+      are debounced.
+- [ ] Extract the command-channel poll logic into `overlay::command_channel`
+      (path, one command per line), with CS:GO registering its own command
+      handlers.
 
-## S6. 构建 / CI
+## S6. Build / CI
 
-- [x] CMake 目标拆分：`zephyrus-core` / `zephyrus-csgo-core` / `zephyrus-csgo`。
-- [x] 保持 `-Wall -Wextra -Werror` 与 `-fvisibility=hidden` /
-      version-script / `--exclude-libs,ALL`。
-- [x] `cmake/zephyrus-csgo.map`（只导出 `zephyrus_csgo_*`）。
-- [x] 测试目标只链接 `Zephyrus::Core`。
-- [ ] CI（构建 + ctest）。
+- [x] CMake target split: `zephyrus-core` / `zephyrus-csgo-core` / `zephyrus-csgo`.
+- [x] Keep `-Wall -Wextra -Werror` and `-fvisibility=hidden` / version-script /
+      `--exclude-libs,ALL`.
+- [x] `cmake/zephyrus-csgo.map` (exports only `zephyrus_csgo_*`).
+- [x] Test targets link only `Zephyrus::Core`.
+- [ ] CI (build + ctest).

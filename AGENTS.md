@@ -6,6 +6,12 @@ This is the **`csgo`** branch, the main development branch. The ACR version is
 frozen on the `acr` branch; the two trees do not contain each other's game
 code. See `BRANCHES.md`. Everything below applies to the CS:GO build only.
 
+## Documentation
+
+All documentation in this repository is written in English: `AGENTS.md`,
+`BRANCHES.md`, `doc/*.md` and `scripts/README.md`. Keep new and updated docs in
+English; do not reintroduce Chinese prose.
+
 ## Build
 
 Dependencies are managed exclusively by **Conan 2** (`conanfile.py`). The three
