@@ -273,35 +273,4 @@ std::string read_string(const toml::table &table, std::string_view key,
     }
     return fallback;
 }
-
-void write_keybind(toml::table &table, std::string_view key,
-                   const keybind &bind) {
-    toml::table entry{};
-    const std::string_view name{key_name(bind.key)};
-    if (bind.key != 0 && name != "Key" && name != "Unknown") {
-        entry.insert("key", std::string{name});
-    }
-    entry.insert("keycode", static_cast<int64_t>(bind.key));
-    entry.insert("mode", std::string{keybind_mode_name(bind.mode)});
-    table.insert_or_assign(std::string{key}, std::move(entry));
-}
-
-void read_keybind(const toml::table &table, std::string_view key,
-                  keybind &bind) {
-    const toml::table *entry{table_at(table, key)};
-    if (entry == nullptr) {
-        return;
-    }
-    const std::string name{
-        read_string(*entry, "key", std::string{key_name(bind.key)})};
-    const int code{key_from_name(name)};
-    if (code != 0) {
-        bind.key = code;
-    } else {
-        bind.key = static_cast<int>(read_int(*entry, "keycode", bind.key));
-    }
-    bind.mode = keybind_mode_from_name(
-        read_string(*entry, "mode", std::string{keybind_mode_name(bind.mode)}));
-    bind.reset();
-}
 } // namespace zephyrus::config

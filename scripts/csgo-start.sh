@@ -7,12 +7,8 @@
 # script refuses to start without the flag and the library itself also refuses
 # to initialize without it.
 #
-# Preferred Steam route: add to the launch options
-#     env SDL_VIDEODRIVER=x11 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia %command% -insecure -windowed -noborder
-# and start Steam through a wrapper that preloads the library, e.g.
-#     LD_PRELOAD=/datassd/Project/zephyrus/build/Debug/libzephyrus-csgo.so steam
-# (setting LD_PRELOAD inside the game launch options breaks the Steam runtime
-# ABI detection helpers, see below). This script is the supported route.
+# Do not put LD_PRELOAD in Steam's launch options: it breaks the Steam runtime
+# ABI detection helpers (see below). Use this script instead.
 #
 # Environment:
 #   GAMEDIR     game root (default: the Steam library path below)
@@ -98,7 +94,7 @@ PRELOAD="$ZEPHYRUS_LIB${LD_PRELOAD:+:$LD_PRELOAD}"
 
 # The bundled SDL2 2.0 has no Wayland video driver ("wayland, x11 not
 # available") while the login environment exports SDL_VIDEODRIVER=wayland.
-# Force X11 (XWayland under a Wayland session), same as the ACR launcher.
+# Force X11 (XWayland under a Wayland session).
 export SDL_VIDEODRIVER=x11
 export SDL_VIDEO_DRIVER=x11
 

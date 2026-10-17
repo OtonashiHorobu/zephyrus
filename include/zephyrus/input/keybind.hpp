@@ -73,12 +73,6 @@ struct keybind {
     bool pressed{};
 };
 
-/// Human readable name for an SDL 1.2 key symbol (e.g. "INSERT").
-[[nodiscard]] std::string_view key_name(int key) noexcept;
-
-/// Reverse of `key_name`; returns 0 for unknown names.
-[[nodiscard]] int key_from_name(std::string_view name) noexcept;
-
 /// Stable config-file spelling of a bind mode.
 [[nodiscard]] std::string_view keybind_mode_name(keybind_mode mode) noexcept;
 

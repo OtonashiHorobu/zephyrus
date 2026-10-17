@@ -1,8 +1,10 @@
 # zephyrus-csgo 移植计划（CS:GO HvH）
 
 > 创建：2026-10-09 · 状态：Phase 1 启动
-> 关联 TODO：[todo-shared.md](todo-shared.md) · [todo-acr.md](todo-acr.md) · [todo-csgo.md](todo-csgo.md)
-> 约束：仅 `-insecure` 环境使用；不做反作弊绕过；ACR 代码保留不删。
+> 关联 TODO：[todo-shared.md](todo-shared.md) · [todo-csgo.md](todo-csgo.md)
+> 约束：仅 `-insecure` 环境使用；不做反作弊绕过。
+> 历史文档：ACR 已拆到 `acr` 分支并冻结（见 [BRANCHES.md](../BRANCHES.md)）；
+> 文中涉及 ACR 的目标、目录与验收项均为拆分前的历史状态。
 
 ## 1. 目标
 
@@ -83,7 +85,7 @@ zephyrus-standalone EXE     继续只做 ACR 菜单预览（链接 acr-core）
 - [x] 版本/BuildID 探测与 pattern 可用性验证（见 §2）。
 
 ### Phase 1 — 分块与共享基础设施（进行中）
-ACR 分块搬迁 + 构建拆分已完成（构建/测试绿色，见 [todo-acr.md](todo-acr.md)）；
+ACR 分块搬迁 + 构建拆分已完成（构建/测试绿色，历史记录见 `acr` 分支）；
 `rmlui_manager` 已与 SDL1.2 解耦；SDL2 模块/menu base 抽取在 [todo-shared.md](todo-shared.md)。
 验收：ACR 构建 + 测试 + standalone + 客户端实测不回归（实测项待做）。
 
@@ -160,7 +162,7 @@ GrenadePrediction、Tickbase/DT（引擎级，最后做）。
   `esp/rage/aa/fl …` 开关，便于无焦点自动化测试。
 - 测试环境：本地 `-insecure` + `sv_lan 1` + bots（打枪/移动/回溯）；
   desync/resolver 需要双客户端或社区 HvH 服（用户复测）。
-- 每阶段保持 ACR 构建/测试绿色。
+- 每阶段保持构建/测试绿色。
 
 ## 7. 风险
 
@@ -168,7 +170,7 @@ GrenadePrediction、Tickbase/DT（引擎级，最后做）。
 |---|---|
 | 游戏 core profile → 固定管线不可用 | 冒烟测试记录 profile；立刻移植官方 GL3 后端 |
 | AnimState/动画层偏移未知 | Ghidra 逆向 + 运行时日志校验；resolver v1 可退化为 pose+eye 方案 |
-| 注入 GL 状态被游戏污染（黑块/闪烁） | begin/end frame 全状态保存恢复（已有 ACR 黑框经验） |
+| 注入 GL 状态被游戏污染（黑块/闪烁） | begin/end frame 全状态保存恢复（沿用 GL2 时期的黑框修复经验） |
 | SDL2 相对鼠标/光标行为 | 参考 Osiris `ImGui_ImplSDL2` 路径 + `SDL_SetRelativeMouseMode` 手动控制 |
 | legacy 客户端不再更新 | 以 BuildID/版本号强校验，pattern 失败时禁用对应功能而不是崩溃 |
 | 卸载安全 | 沿用 ACR 生命周期（`active_detour_depth` 拒绝、析构兜底） |

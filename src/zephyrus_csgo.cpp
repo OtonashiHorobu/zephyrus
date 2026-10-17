@@ -135,7 +135,7 @@ void panic_disable_features() noexcept {
 
 /// Scripted testing/tuning channel: newline separated commands read from
 /// `$ZEPHYRUS_CSGO_CMD` (default `$XDG_RUNTIME_DIR/zephyrus-cmd`). The file is
-/// removed after processing, like the ACR channel.
+/// removed after processing.
 [[nodiscard]] std::string command_path() {
     if (const char *command{std::getenv("ZEPHYRUS_CSGO_CMD")};
         command != nullptr && command[0] != '\0') {

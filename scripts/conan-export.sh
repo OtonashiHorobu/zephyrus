@@ -8,7 +8,7 @@
 
 set -eu
 
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 
 for recipe in boost-ext-di cmrc zydis; do
     echo "Exporting $recipe..."

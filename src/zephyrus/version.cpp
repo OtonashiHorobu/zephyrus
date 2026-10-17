@@ -19,7 +19,7 @@ namespace {
 } // namespace
 
 std::string_view full_version() noexcept {
-    static const std::string value{build("Zephyrus ACR")};
+    static const std::string value{build("Zephyrus")};
     return value;
 }
 

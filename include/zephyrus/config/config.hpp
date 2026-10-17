@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include <zephyrus/input/keybind.hpp>
-
 #include <toml++/toml.hpp>
 
 #include <chrono>
@@ -93,11 +91,4 @@ class document {
 [[nodiscard]] std::string read_string(const toml::table &table,
                                       std::string_view key,
                                       std::string fallback) noexcept;
-
-/// Keybind as `{ key = "X", mode = "toggle" }` (keycode fallback for unknown
-/// names).
-void write_keybind(toml::table &table, std::string_view key,
-                   const keybind &bind);
-void read_keybind(const toml::table &table, std::string_view key,
-                  keybind &bind);
 } // namespace zephyrus::config

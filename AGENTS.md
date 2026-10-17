@@ -1,5 +1,11 @@
 # AGENTS.md
 
+## Branch
+
+This is the **`csgo`** branch, the main development branch. The ACR version is
+frozen on the `acr` branch; the two trees do not contain each other's game
+code. See `BRANCHES.md`. Everything below applies to the CS:GO build only.
+
 ## Build
 
 Dependencies are managed exclusively by **Conan 2** (`conanfile.py`). The three
@@ -46,7 +52,7 @@ Test executables are auto-generated from `test/**/*.cpp`. Filename underscores b
 
 - **CRTP managers**: `abstract::manager<Derived>` base class — new subsystems inherit it and implement `init_impl()` returning `std::expected<void, std::string>`
 - **Error handling**: `std::expected` (C++23), not exceptions
-- **Dependency injection**: Boost.DI (`boost/di.hpp`), wired in `global_zephyrus()`
+- **Dependency injection**: Boost.DI (`boost/di.hpp`), wired in `zephyrus_csgo_init()`
 - **Asset embedding**: CMRC — add resources in `asset/CMakeLists.txt`, declare with `CMRC_DECLARE` in headers
 - **Logging**: spdlog with custom `ZEPHYRUS_*` macros (`ZEPHYRUS_TRACE`, `ZEPHYRUS_INFO`, etc.)
 
@@ -54,54 +60,54 @@ Test executables are auto-generated from `test/**/*.cpp`. Filename underscores b
 
 | Target | Type | Description |
 |---|---|---|
-| `zephyrus-core` | Static lib | Core library (`src/zephyrus/`) |
-| `zephyrus-standalone` | Executable | Standalone entry point |
-| `zephyrus-acr` | Shared lib | ACR entry point (Linux `__attribute__((constructor))`) |
+| `zephyrus-core` | Static lib | Shared core: hook engine, config, RmlUi runtime, logging, version |
+| `zephyrus-csgo-core` | Static lib | Source SDK bindings, patterns/netvars, features, overlay/menu, SDL2 function table |
+| `zephyrus-csgo` | Shared lib | Injected entry point (Linux `__attribute__((constructor))`) |
 
 ## Gotchas
 
 - CMake 4.2+ required
-- Linux: `zephyrus-standalone` static-links libstdc++/libgcc; `zephyrus-acr` never does (it is `dlopen`ed into the game, which already has libstdc++), and always builds with `-fvisibility=hidden`
+- Linux: `zephyrus-csgo` is `dlopen`ed into the game process, which already has libstdc++; never link a second copy. It builds with `-fvisibility=hidden`, `-Wl,--exclude-libs,ALL` and the version script `cmake/zephyrus-csgo.map` (exports only `zephyrus_csgo_*`)
 - `NDEBUG` controls spdlog level: `trace` in debug, `info` in release
 - Dependencies come from **Conan 2**, never CPM and never vendored. Non-ConanCenter recipes: `conan/recipes/` (`boost-ext-di`, `cmrc`, `zydis`)
-- Injected builds do not link SDL: the SDL 1.2 function table is resolved at runtime from the game's own loaded instance (`src/zephyrus/sdl/`)
-- The hook engine uses Zydis for prologue decoding; hooks are installed from the first `SDL_GL_SwapBuffers` callback to guarantee a safe point with a current GL context
+- Injected builds never link SDL2: the SDL2 function table is resolved at runtime from the game's own loaded instance (`src/zephyrus/sdl2/`). `SDL_PollEvent` / `SDL_GL_SwapWindow` are hooked through their `FF 25 rel32` pointer slots, with an inline-hook fallback
+- The library refuses to initialize unless the game was launched with `-insecure`; it also validates `csgo/steam.inf` and warns on a version mismatch
+- SDL2 is loaded by the engine *after* our ELF constructor, so the overlay installs from a background thread that polls for the module and then swaps the pointer slots
+- The hook engine uses Zydis for prologue decoding; hooks are installed from the first present callback, when a GL context is current
+- Only vtable slots / patterns / offsets verified in Ghidra may be used. Unverified hooks and patterns are deliberately removed (see the third audit round in `doc/todo-csgo.md`); do not re-add Osiris patterns without checking them against the local binaries
+- The overlay uses the official RmlUi GL3 renderer and saves/restores the host GL state around every frame; the old GL2 render interface belonged to ACR and is gone
 
 ## Feature Modules
 
 | Module | Files | Notes |
 |---|---|---|
-| Game bindings | `include/zephyrus/acr/`, `src/zephyrus/acr/` | Offsets generated with `offsetof` against the game headers (`offsets.hpp`); symbols resolved through `dlsym(RTLD_DEFAULT, ...)` (`symbols.hpp`). `weapon::mag/ammo/gunwait` are **references**, dereference the stored pointer |
-| ESP | `features/esp.*` | GL geometry (2D/2D corners/3D/3D corners, glow as extruded quads, health bars, snaplines) + RmlUi text labels (`asset/ui/esp/esp.rml`) |
-| Skeleton | `features/skeleton.*` | Hooks `renderclient(playerent*)` + `md2::render`, reads the dynamic vertex cache of the player body mesh, transforms with `vertmodel::matrixstack[0]`, clusters joints by height. Player models are MD2 (vertex keyframes, no bones) |
-| Rage | `features/rage.*` | Per-weapon profiles (Osiris style) with global fallback, silent aim, autofire, triggerbot, head magnet (ray-closest point, ≤1.95 cube pull), `skip_protected`, auto scope (`setscope`), no recoil (zero `pitchvel/yawvel`), hitbox select + lethal, hitchance estimation (aware of the forced packet state) and hitchance-gated firing / auto stop, shot log with miss reasons |
-| Movement | `features/movement.*` | Hooks the **inner** `moveplayer(physent*, int, bool, int)` (200 Hz substep): maxspeed speedhack, auto bhop, and instant air control (WASD changes the horizontal velocity direction without turning the view). Collision stays with the game; speeds above ~3x may tunnel |
-| Exploits | `features/exploits.*` | `sendposition` hook for forced scope/crouch/zero-velocity/on-floor bits; `addshotline` hook for spawn-protection mirroring + shot tracers; knife/grenade protocol actions (`SV_WEAPCHANGE` + `SV_SHOOTC` + `SV_EXPLODE`, weapon restore is **delayed** or the queued event is dropped by `weap != cs.gunselect`); blink/teleport validated through `entinmap` |
-| Config | `config/config.*` | TOML (toml++). Defaults at startup; `ZEPHYRUS_ACR_CONFIG=<file>` loads a profile; every change snapshots to `~/.config/zephyrus/latest.toml` (recovery only, never auto-loaded); named profiles in `profiles/`; clipboard import/export |
-| Third person | `features/thirdperson.*` | Animates the exported `thirdperson` distance variable so `camera3` pulls back/zooms in smoothly |
-| Menu | `overlay/menu.*`, `asset/ui/menu/menu.rml` | Analyst-style visual language, Osiris layout (top tabs + sidebar + sections), inline keybinds (left click rebind, right click Off/Always/Hold/Toggle/Unset), profile editor, OsirisAndExtra-style Config card (profile list + name field + Create/Save/Load/Delete/Open folder/Reset/Clipboard), RmlUi animations (panel/section stagger, pop-in, number easing, slider/icon transitions) |
-| Backend | `rmlui/backend/` | GL2 render interface with FBO layers (`box-shadow`) and filters (blur/color matrices). Layer compositing must save GL state **before** the filter chain runs — capturing afterwards restores the post-process FBO/viewport/blend and turns text into black blocks for the rest of the frame. SDL_image texture loading, SDL2/3 clipboard, SDL cursors; system interface feeds keys/mouse to RmlUi |
+| Game bindings | `include/zephyrus/csgo/`, `src/zephyrus/csgo/` | `CreateInterface` (`RTLD_NOLOAD` + `dlsym`), vtable wrappers, recv-table netvars (`netvars.cpp`), Linux patterns (`patterns.cpp`), entity/usercmd/view_setup/trace/bone helpers |
+| Animations | `features/csgo/animations.*` | Per-player history: matrices, pose, animation layers, simulation time, velocity (48 records) for backtrack/resolver; fed from `frameStageNotify` (37) |
+| Rage | `features/csgo/rage.*` + `hitchance.*` + `autowall.*` | Per-weapon-category profiles, silent aim, autofire, hitbox select + lethal, Monte-Carlo hitchance from the targeted record's bones, autowall damage model (engine trace + `TraceToExit`, `GetSurfaceData` slot 6) |
+| AntiAim | `features/csgo/anti_aim.*` | Pitch (down/up/zero/fake), yaw (backward/right/left/jitter/spin/static/at-targets), choke-flip desync (static/jitter/sway/auto-direction), LBY break, manual keys, movement fix |
+| Backtrack | `features/csgo/backtrack.*` | Selects/rewinds animation records; rewind only rewrites `cmd.tick_count` and never writes entity origins |
+| Fake lag | `features/csgo/fake_lag.*` | Static/adaptive/random + on-shot, drives `sendPacket`; `preview()` lets AA know whether this tick sends |
+| Resolver | `features/csgo/resolver.*` | Foot-yaw / LBY detection stack, brute-force by shot count, on-hit/on-miss feedback, per-record position rotation |
+| Movement | `features/csgo/movement.*` | Bunnyhop, auto-strafe, slow-walk (overlay key capture), movement fix after AA changes angles |
+| Visuals | `features/csgo/visuals.*` | No-flash (`m_flFlashMaxAlpha`) and FOV changer — only the verified paths remain |
+| ESP | `features/csgo/esp.*` | RmlUi overlay layer independent of the menu: box/health/name/weapon/distance/snapline, visible/enemy colouring |
+| Overlay / Menu | `overlay/csgo/*`, `asset/ui/csgo/menu.rml` | SDL2 pointer-slot hooks, RmlUi GL3, tabs RAGEBOT / VISUALS / MISC / CONFIGS, inline keybinds (raw SDL2 scancodes), config profile card, FPS/perf readout |
+| Backend | `rmlui/backend/` | GL3 render interface (`render_interface_gl3.*`), SDL2 system interface, SDL2 function table and backend (`backend_sdl2_gl3.cpp`, `system_interface_sdl2.*`) |
+| Config | `config/config.*` | TOML (toml++). Defaults at startup, persisted to `~/.config/zephyrus/csgo/latest.toml`, named profiles in `.../csgo/profiles/`, debounced autosave, clipboard import/export |
 
-### RageBot spread model (server side, `serverevents.h`)
+### Injected lifecycle & unload
 
-- `spread = guns[weap].spread * (vel.magnitude()/3 + 0.4) * 1.2 * crouchfactor`
-- `applyspread` adds `(rnd(spread) - spread/2) * factor` per axis to `to`, with `factor = distance/1000 * perk * adsfactor`
-- The final angular half angle per axis is therefore `spread * perk * ads / 2000` rad; client-side no-spread is **not** possible (the server owns the roll)
-- Scoped snipers have `spreadrem ~ 97%`, hence auto scope makes them near perfect
-
-### Lifecycle & unload (injected build)
-
-- `zephyrus_acr_init()` runs from the ELF constructor (`dlopen`/GDB injection); `zephyrus_acr_shutdown()` is exported for runtime unload and is also called by the library destructor. Both are idempotent, and init can be called again after a shutdown (no `dlclose` needed).
-- The game exits through `quit()` -> inlined `cleanup()` -> `SDL_Quit()`. `cleanup()` is **inlined into `quit()`**, so the exit hooks are `_Z4quitv` and `SDL_Quit` (tear the runtime down while SDL/GL are still alive, then call the original).
-- `zephyrus_acr_shutdown()` refuses to run when called from inside a detour (`hook::active_detour_depth() > 0`): that would free the trampoline and owning objects that are still on the stack. Call it from game code (or retry).
-- Every hook is owned: overlay hooks in `overlay::shutdown()`, skeleton hooks in `esp::shutdown()`, rage hooks in `rage::shutdown()`, exit hooks in `uninstall_exit_hooks()`. `inline_hook` restores the patched bytes in its destructor and unmaps its trampoline/island arenas once the last hook is removed, so unload/reload cycles do not leak RWX pages.
-- Keep the module `dlclose`-able: spdlog must not use the default `%+` pattern — it pulls in spdlog's MDC, whose non-trivial `thread_local` map registers a TLS destructor and makes glibc keep the library mapped forever. `logging_manager` sets an explicit pattern (and colours `trace` gray via `ansicolor_sink::set_color`).
+- `zephyrus_csgo_init()` runs from the ELF constructor (`LD_PRELOAD` / gdb injection). It validates `-insecure`, creates the DI runtime, probes modules/interfaces/patterns and starts the overlay installer thread.
+- `zephyrus_csgo_shutdown()` is exported for runtime unload and is also called by the library destructor. Both are idempotent; init can run again after a shutdown (no `dlclose` needed).
+- Hooks are owned: overlay hooks in `overlay::shutdown()`, client-mode hooks in `client_mode_hooks`, feature hooks in each feature's shutdown. `inline_hook` restores the patched bytes in its destructor and unmaps its trampoline/island arenas once the last hook is removed.
+- Do not call `zephyrus_csgo_shutdown()` from inside a detour (`hook::active_detour_depth() > 0`): that would free the trampoline and owning objects still on the stack.
+- Keep the module `dlclose`-able: spdlog must not use the default `%+` pattern — it pulls in spdlog's MDC, whose non-trivial `thread_local` map registers a TLS destructor and makes glibc keep the library mapped forever.
 
 ### Testing (X11)
 
-- `scripts/acr-start.sh` (setsid + LD_PRELOAD), `scripts/acr-do.sh` (keys/mouse/screenshots), `scripts/acr-menu-click.sh` (menu-relative clicks)
-- `/datassd/Clone/acr-bin/client-zephyrus.sh` launches the client with zephyrus directly (auto-detects the Debug/Release library, forces `SDL_VIDEODRIVER=x11` because the user environment exports `wayland` which SDL 1.2 cannot use)
-- Test env: `ZEPHYRUS_ACR_BOTS=N`, `ZEPHYRUS_ACR_ESP=1`, `ZEPHYRUS_ACR_RAGE=1`, `ZEPHYRUS_ACR_RAGE_TEST=1`, `ZEPHYRUS_ACR_CONFIG=<profile.toml>`, `ZEPHYRUS_ACR_CMD=<path>`
-- Command channel: write newline-separated commands to `$XDG_RUNTIME_DIR/zephyrus-cmd` (default path); useful for manual/scripted testing without focus games: `knife [cn]`, `nade [cn]`, `blink`, `blink_crosshair`, `goto <cn>`, `lookat <cn>`, `players`, `dump`, `key <forward|backward|left|right|jump|attack> <0|1>`, `movement 0|1`, `air 0|1`, `bhop 0|1`, `speed 0|1`, `config save|load|delete|list|folder|export|import|reset [name]`, `ui open|close|tab <name>|panel <name>|reset`
-- Watch out: the game window size changes between runs — always compute click coordinates from `xdotool getwindowgeometry`; `xdotool search --name` may need a moment after launch, and `--sync` variants can block if the window is gone
-- The current `linux_64_client` in `acr-bin` ships the **modelcache hunt instrumentation**: it intentionally aborts (`ACR error (6)`) when the known genshadowvolume cache corruption is detected. That crash is game-side (`docs/modelcache-shadow-cache-bug.md`), not zephyrus; use `linux_64_client.bak-20260523` (local fix build) for long runs
+- `scripts/csgo-start.sh` launches the legacy linux64 client with `LD_PRELOAD`, asserts `-insecure`, forces X11 and windowed borderless (Steam launch options are documented in the script header)
+- `scripts/csgo-cmd.sh <command...>` writes to the command channel; the library reads `$ZEPHYRUS_CSGO_CMD` (default `$XDG_RUNTIME_DIR/zephyrus-cmd`) on the next tick and deletes the file after processing
+- Useful commands: `ui open|close|toggle|tab <name>|panel <name>`, `rage|aa|fl|bt|esp|autowall|fov|bhop on|off`, `desync ...`, `dump`, `players`, `netvar <name>`, `trace`, `perf fps|anim on|off`, `style <selector> <prop> <value|->`, `config save|load|delete|list|reset|export|import|folder [name]`
+- gdb-exported entry points: `zephyrus_csgo_init`, `zephyrus_csgo_shutdown`, `zephyrus_csgo_probe`, `zephyrus_csgo_toggle_overlay`, `zephyrus_csgo_set_fov`, `zephyrus_csgo_set_bhop`
+- Environment: `GAMEDIR`, `ZEPHYRUS_LIB` (defaults to the newest Debug/Release build), `LOG`, `WINDOWED`, `BORDERLESS`, `GPU`
+- The X11 window size changes between runs — always compute coordinates from `xdotool getwindowgeometry`; `xdotool search --name` may need a moment after launch
