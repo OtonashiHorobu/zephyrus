@@ -1,255 +1,274 @@
-# zephyrus TODO — csgo（新游戏）
+# zephyrus TODO — csgo (new game)
 
-> 维护规则见 [todo-shared.md](todo-shared.md)，总计划见 [csgo-port-plan.md](csgo-port-plan.md)。
-> 功能参考：OsirisAndExtra（重写）；SDK/patterns 参考 Osiris csgo 分支（MIT，可移植）。
+> Maintenance rules: see [todo-shared.md](todo-shared.md); overall plan: [csgo-port-plan.md](csgo-port-plan.md).
+> Feature reference: OsirisAndExtra (rewritten); SDK/patterns reference: Osiris csgo branch (MIT, portable).
 
-## F0. 安全与注入
+## F0. Safety and injection
 
-- [x] `-insecure` 强校验：解析 `/proc/self/cmdline`；缺失 → 拒绝初始化（stdout + log），
-      绝不安装任何 hook。（已用 `ctypes.CDLL` 无 `-insecure` 加载验证：库正常载入、
-      打印拒绝信息、不初始化）
-- [x] 版本校验：读 `csgo/steam.inf` 的 PatchVersion/ClientVersion，不匹配时告警。
-- [x] `scripts/csgo-start.sh`：`LD_PRELOAD` + `-insecure` 断言 + Steam scout runtime 包装
-      （`libcurl-gnutls.so.4`）+ 强制 X11 + `WINDOWED=1`（XWayland 全屏黑屏的规避）。
-      Steam 启动项写法见脚本头。直接启动已实测可进游戏。
-- [ ] 游戏内注入实测（脚本已可用；待叠加层实现后做）。
+- [x] `-insecure` hard validation: parse `/proc/self/cmdline`; if missing → refuse initialization
+      (stdout + log), never install any hook. (Verified by loading via `ctypes.CDLL` without
+      `-insecure`: the library loads normally, prints the refusal message, and does not initialize.)
+- [x] Version validation: read PatchVersion/ClientVersion from `csgo/steam.inf`; warn on mismatch.
+- [x] `scripts/csgo-start.sh`: `LD_PRELOAD` + `-insecure` assertion + Steam scout runtime wrapper
+      (`libcurl-gnutls.so.4`) + force X11 + `WINDOWED=1` (workaround for the XWayland fullscreen
+      black screen). The Steam launch-option form is documented in the script header. Direct
+      launch has been tested and reaches the game.
+- [ ] In-game injection test (the script is ready; do it after the overlay exists).
 
-## F1. SDK 基础（Phase 2）
+## F1. SDK basics (Phase 2)
 
-- [x] 模块加载：`hook::find_module`（basename 匹配，dl_iterate_phdr）+ 探针日志。
-- [x] 接口获取：`CreateInterface`（RTLD_NOLOAD + dlsym；`s_pInterfaceRegs` 回退后续做）。
-- [x] `patterns`：探针已对 4 个 Osiris Linux pattern 做运行期校验（localPlayer 等）。
-- [x] `netvars`：recv table 遍历（`src/zephyrus/csgo/netvars.cpp`）。
-- [x] `patterns` 全量移植（Linux client 表 + engine 表，`patterns.cpp`）。
-- [x] `memory`/`game`：localPlayer/globalVars/clientMode/input/engine/engineTrace/
-      cvar/glowObjectManager（pattern）/weaponSystem/playerResource/plantedC4s/
-      gameRules/lineGoesThroughSmoke/isOtherEnemy/setAbsOrigin/…。
-- [x] `entity`/`usercmd`/`view_setup`/trace/bone（`virtual_call` + netvar 访问器）。
-- [x] 启动 dump：模块基址、版本、接口、pattern 命中清单（`zephyrus_csgo_probe`）。
+- [x] Module loading: `hook::find_module` (basename match, dl_iterate_phdr) + probe logging.
+- [x] Interface acquisition: `CreateInterface` (RTLD_NOLOAD + dlsym; `s_pInterfaceRegs` fallback
+      to be done later).
+- [x] `patterns`: the probe has runtime-validated 4 Osiris Linux patterns (localPlayer etc.).
+- [x] `netvars`: recv-table traversal (`src/zephyrus/csgo/netvars.cpp`).
+- [x] Full `patterns` port (Linux client table + engine table, `patterns.cpp`).
+- [x] `memory`/`game`: localPlayer/globalVars/clientMode/input/engine/engineTrace/
+      cvar/glowObjectManager (pattern)/weaponSystem/playerResource/plantedC4s/
+      gameRules/lineGoesThroughSmoke/isOtherEnemy/setAbsOrigin/….
+- [x] `entity`/`usercmd`/`view_setup`/trace/bone (`virtual_call` + netvar accessors).
+- [x] Startup dump: module base addresses, version, interfaces, pattern hit list
+      (`zephyrus_csgo_probe`).
 
-## F2. 叠加层（Phase 2）
+## F2. Overlay (Phase 2)
 
-- [x] `SDL_PollEvent` 指针槽 hook（事件先给 RmlUi；菜单可见时吞事件；inline 回退已就位）。
-- [x] `SDL_GL_SwapWindow` 指针槽 hook（画帧 + 原 swap；inline 回退已就位）。
-- [x] 光标/相对鼠标：菜单可见时 `SDL_SetRelativeMouseMode(SDL_FALSE)` +
-      show cursor；关闭时还原（每帧重设以防游戏抢回）。
-- [x] 延迟安装：SDL2 由引擎在 constructor 之后加载，后台线程轮询 + 指针槽交换。
-- [x] 菜单骨架 `asset/ui/csgo/menu.rml`（冒烟测试文档：渲染/输入/光标链路）。
-- [x] 游戏内实测：重启游戏 → INSERT 开合 → 日志 `csgo overlay hooks installed` /
-      `csgo overlay ready`；菜单渲染与光标恢复已验证。
-- [x] 游戏内鼠标修复：菜单可见时拦截 `SDL_SetRelativeMouseMode(TRUE)` /
-      `SDL_WarpMouseInWindow` / `SDL_ShowCursor(0)`，并按帧轮询 `SDL_GetMouseState`
-      合成 down/up（游戏用自身事件路径消费按键事件，事件队列不可靠）。
-- [x] `-insecure` 冒烟：日志 GL_VERSION / GL_CONTEXT_PROFILE_MASK 已加入
-      （实机：`GL_VERSION=4.6.0 NVIDIA` / `profile_mask=0x0` → 兼容上下文，
-      固定管线可用；GL3 后端继续使用，GL2 后端保留为备选）。
-- [x] 命令通道 + 测试脚本（`ui open|close|toggle|tab|panel`/`dump`/`players`/
+- [x] `SDL_PollEvent` pointer-slot hook (events go to RmlUi first; events are swallowed while the
+      menu is visible; inline fallback in place).
+- [x] `SDL_GL_SwapWindow` pointer-slot hook (draw the frame + original swap; inline fallback in
+      place).
+- [x] Cursor/relative mouse: while the menu is visible, `SDL_SetRelativeMouseMode(SDL_FALSE)` +
+      show cursor; restore on close (reset every frame so the game cannot take it back).
+- [x] Delayed installation: SDL2 is loaded by the engine after the constructor; a background
+      thread polls and swaps the pointer slots.
+- [x] Menu skeleton `asset/ui/csgo/menu.rml` (smoke-test document: render/input/cursor chain).
+- [x] In-game test: restart the game → INSERT opens/closes → log `csgo overlay hooks installed` /
+      `csgo overlay ready`; menu rendering and cursor restore verified.
+- [x] In-game mouse fix: while the menu is visible, intercept `SDL_SetRelativeMouseMode(TRUE)` /
+      `SDL_WarpMouseInWindow` / `SDL_ShowCursor(0)`, and synthesize down/up by polling
+      `SDL_GetMouseState` every frame (the game consumes key events through its own event path;
+      the event queue is unreliable).
+- [x] `-insecure` smoke test: GL_VERSION / GL_CONTEXT_PROFILE_MASK logging added (on the test
+      machine: `GL_VERSION=4.6.0 NVIDIA` / `profile_mask=0x0` → compatibility context,
+      fixed-function pipeline available; the GL3 backend stays in use, GL2 kept as a fallback).
+- [x] Command channel + test script (`ui open|close|toggle|tab|panel`/`dump`/`players`/
       `rage`/`aa`/`fl`/`bt`/`esp`/`glow`/`autowall`/`fov`/`bhop`/`trace`/
-      `config save|load|delete|list|reset|export|import|folder [name]`；
-      `scripts/csgo-cmd.sh`）。已导出 `zephyrus_csgo_toggle_overlay` /
-      `zephyrus_csgo_probe` 供 gdb 自动化。
+      `config save|load|delete|list|reset|export|import|folder [name]`;
+      `scripts/csgo-cmd.sh`). Exported `zephyrus_csgo_toggle_overlay` /
+      `zephyrus_csgo_probe` for gdb automation.
 
-## F3. HvH v1 功能（Phase 3）
+## F3. HvH v1 features (Phase 3)
 
-- [x] Hooks：ClientMode `createMove`(25, 支持 sendPacket 覆写) / `overrideView`(19)；
-      Client `frameStageNotify`(37，动画记录)。
-      **（第三轮已删除未核对项：getViewModelFov 36 / doPostScreenEffects 45 /
-      shouldDrawFog 18 / dispatchUserMessage 38 / UpdateClientSideAnimation 286。）**
-- [~] `EnginePrediction`（velocity/flags，参考 O&E）：完整实现
-      （`features/csgo/prediction.*`，IPrediction 20/21、GameMovement 1）；
-      受 `restoreEntityToPredictedFrame` 未逆向限制自动禁用（re-f3 B1）。
-- [x] `Animations` 框架：per-player 记录（matrix、pose、layers、simtime、
-      velocity），48 条历史供 backtrack/resolver；`UpdateClientSideAnimation`
-      hook + real matrix 管线已上线（fake matrix / 前向 fake pose 需 A5/A6）。
-- [x] Ragebot 增强：Monte-Carlo hitbox 命中率（`hitchance.*`，基于被瞄准的
-      记录骨骼；backtrack 记录同样适用）、autowall 伤害模型（`autowall.*`，
-      引擎 trace 重写 TraceToExit；`IPhysicsSurfaceProps::GetSurfaceData`
-      已用 core 验证为 **槽位 6**）、per-category 配置（7 类默认）。
-      **no-spread 已整体移除**：CS:GO 的散布由服务端随机数决定，客户端无法
-      消除（`MD5_PseudoRandom` 实测取 `digest+6`，仅存档于 re-abi 文档）。
-- [~] AntiAim 增强：pitch（down/up/zero/fake）/yaw（backward/right/left/
-      jitter/spin/static/at-targets）、choke 翻转 desync（static/jitter/
-      sway/auto-direction）、LBY 破防、manual 按键（overlay 原始键事件）、
-      auto-direction 扫描。真实 animstate 写入（fake pose）需 A5/A6。
-- [x] Triggerbot：**已按用户要求丢弃**（HvH-only）。
-- [x] Backtrack v1 → v2：记录迁移到 Animations（bones/simtime），
-      select/rewind + per-record 解析与烟雾检查（不再每记录 trace）。
-- [x] AntiAim v1：pitch（down/up/zero）、yaw（backward/jitter/spin）+ desync 抖动。
-- [x] Fakelag v1：static/adaptive/random + on-shot；新增 `preview()` 供 AA
-      判断本 tick 是否发送（deterministic per-tick limit）。
-- [x] Resolver v2：移动速度 / AnimState footYaw（Linux 0x84，运行期
-      合理性校验）/ `m_flLowerBodyYawTarget` 检测栈 + 按射击计数的
-      brute-force；per-record 位置旋转。
-- [x] ESP v1（RmlUi 叠加层，独立于菜单开合）：盒子/血量/名字/武器/距离/snapline +
-      可见/敌我着色；骨架待做。
-- [x] ~~Glow~~ → 第三轮整体移除（`glowObjectManager` pattern 未核对，开启即崩）。
-- [x] Visuals：no-flash（`m_flFlashMaxAlpha` 置零）；remove scope / no-fog
-      第三轮移除（槽位未核对且行为错误：18 是 `return true` 桩、45 跳过
-      `DoPostScreenEffects` 不隐藏瞄准镜叠层）。
-- [x] Movement：bhop、auto-strafe、slow-walk（按键，overlay key capture）、
-      movement fix（AA 改角后保持世界方向）。
-- [x] 菜单/配置：Rage/AA/Backtrack/Fakelag/Movement/ESP/Resolver 全部
-      绑定到菜单并持久化到 `csgo/latest.toml`（`[features]`）；新增
-      Weapons 页（按武器类别）、manual 按键捕获、desync/LBY 控件。
-      （`ZEPHYRUS_CSGO_*` 环境变量模式被 TOML 取代。Glow 页第三轮移除。）
+- [x] Hooks: ClientMode `createMove`(25, supports overriding sendPacket) / `overrideView`(19);
+      Client `frameStageNotify`(37, animation recording).
+      **(Round 3 removed unverified items: getViewModelFov 36 / doPostScreenEffects 45 /
+      shouldDrawFog 18 / dispatchUserMessage 38 / UpdateClientSideAnimation 286.)**
+- [~] `EnginePrediction` (velocity/flags, O&E reference): full implementation
+      (`features/csgo/prediction.*`, IPrediction 20/21, GameMovement 1); automatically disabled
+      because `restoreEntityToPredictedFrame` is not reverse-engineered (re-f3 B1).
+- [x] `Animations` framework: per-player records (matrix, pose, layers, simtime,
+      velocity), 48 history entries for backtrack/resolver; `UpdateClientSideAnimation`
+      hook + real-matrix pipeline are live (fake matrix / forward fake pose need A5/A6).
+- [x] Ragebot enhancements: Monte-Carlo hitbox hitchance (`hitchance.*`, based on the aimed
+      record's bones; backtrack records also work), autowall damage model (`autowall.*`,
+      engine trace rewrite of TraceToExit; `IPhysicsSurfaceProps::GetSurfaceData`
+      verified on a core as **slot 6**), per-category config (7 categories by default).
+      **no-spread removed entirely**: CS:GO spread is decided by server-side randomness and
+      cannot be removed client-side (`MD5_PseudoRandom` measured as `digest+6`; archived in
+      the re-abi doc only).
+- [~] AntiAim enhancements: pitch (down/up/zero/fake)/yaw (backward/right/left/
+      jitter/spin/static/at-targets), choke-flip desync (static/jitter/
+      sway/auto-direction), LBY break, manual keys (raw overlay key events),
+      auto-direction scan. Real animstate writes (fake pose) need A5/A6.
+- [x] Triggerbot: **dropped at the user's request** (HvH-only).
+- [x] Backtrack v1 → v2: records moved to Animations (bones/simtime),
+      select/rewind + per-record resolve and smoke check (no more trace per record).
+- [x] AntiAim v1: pitch (down/up/zero), yaw (backward/jitter/spin) + desync jitter.
+- [x] Fakelag v1: static/adaptive/random + on-shot; added `preview()` so AA can tell whether
+      this tick sends (deterministic per-tick limit).
+- [x] Resolver v2: movement speed / AnimState footYaw (Linux 0x84, runtime sanity check) /
+      `m_flLowerBodyYawTarget` detection stack + shot-count brute-force; per-record position
+      rotation.
+- [x] ESP v1 (RmlUi overlay, independent of the menu): box/health/name/weapon/distance/snapline +
+      visible/team colouring; skeleton pending.
+- [x] ~~Glow~~ → removed entirely in round 3 (`glowObjectManager` pattern unverified; enabling it
+      crashed).
+- [x] Visuals: no-flash (`m_flFlashMaxAlpha` zeroed); remove scope / no-fog removed in round 3
+      (slots unverified and behaviour wrong: 18 is a `return true` stub, 45 skips
+      `DoPostScreenEffects` without hiding the scope overlay).
+- [x] Movement: bhop, auto-strafe, slow-walk (key, overlay key capture),
+      movement fix (keep the world direction after AA changes angles).
+- [x] Menu/config: Rage/AA/Backtrack/Fakelag/Movement/ESP/Resolver all bound to the menu and
+      persisted to `csgo/latest.toml` (`[features]`); added a Weapons page (by weapon category),
+      manual key capture, desync/LBY controls. (`ZEPHYRUS_CSGO_*` environment-variable mode was
+      replaced by TOML. Glow page removed in round 3.)
 
-### 第二轮修复（2026-10-10，review + core 分析）
+### Second fix round (2026-10-10, review + core analysis)
 
-- [x] **TraceRay 调用约定崩溃（SIGSEGV）**：`virtual_call` 按值传 `Ray_t`/
-  `trace_t`/`Vector`，SysV 下 MEMORY 聚合落到栈上、寄存器留垃圾；引擎按
-  指针解引用（core: `rep stos %rax,(%rdi)`, rdi=1）。修复：`entity.hpp` 的
-  `engine_trace_ray()` / `engine_point_contents()` typed wrapper，全指针参数；
-  `ITraceFilter` 移除误加的虚析构（槽 0=ShouldHitEntity, 1=GetTraceType）；
-  `trace` 尺寸 static_assert 0x68（引擎清零 104 字节）。
-- [x] **`IPhysicsSurfaceProps::GetSurfaceData` 崩溃**：Osiris 的槽位 5 实际是
-  `GetPhysicsProperties`（4 个输出指针）→ 修正为 **槽 6**（runtime vtable +
-  反汇编验证）；`surfacedata_t` 字段偏移用 core 实测。
-- [x] **RageBot / AntiAim / FakeLag 顺序**：rage 先跑（FOV 用真实视角；autofire
-  位对 fakelag on_shot / AA disable_on_shot 可见），fakelag 决定 send，AA 最后；
-  AA 在 ragebot 已瞄准的 tick 上不覆盖角度（O&E 语义，`original_angles`）。
-- [x] **no-spread 移除**（服务端拥有随机数；UI/命令/模块全部删除），
-  `MD5_PseudoRandom`/`UpdateSpread` 逆向结果存档于 `doc/csgo-re-abi.md`。
-- [x] **ESP 修复**：玩家名/武器名 RML 转义（武器名剥掉 `#SFUI_WPNHUD_` 前缀）；
-  关闭/死亡时清空图层；渲染行不再引用旧 document；改用 `GetAbsOrigin`；
-  **相机背后目标投影守卫**（修复"抽播/飘天空/入地"的盒子）。
-- [x] **菜单重做**：Config 页真实档案管理（save/load/delete/reset/export/
-  import/folder，`config_*.` 命令同步）、滚动、拖拽视口夹取、右下角 resize、
-  combo/键位弹窗与 Off/Always/Hold/Toggle/Unset 模式、键位持久化（SDL2
-  scancode 原始存储）、Escape 取消捕获恢复原值、滑块 dragging 去过渡、
-  `config_.tick()` 防抖（不再每次改动同步写盘）、FPS 实时显示。
-- [x] **内建 UI 与实际能力的对齐**：删除 Chams/Tickbase/Indicators/Skeleton/
-  烟雾/去闪（保留）/十字线/Max distance/Multipoint/No spread 等未实现控件。
-- [x] **配置目录拆分**：`~/.config/zephyrus/acr/{latest.toml,profiles}` 与
-  `~/.config/zephyrus/csgo/{latest.toml,profiles}`；ACR 旧顶层配置一次性迁移，
-  CS:GO 不再列出 ACR 档案。版本串按产品区分（`Zephyrus CS:GO ...`）。
-- [x] **Bug 修复**：Team check 反义、backtrack `time_limit` 生效、动画记录
-  仅在 `setup_bones` 成功时入队、hook 安装失败可重试（不再误置已安装）、
-  重新注入复位 `overlay_stop`、`server_time` 同 tick 复用缓存、AA static
-  yaw_add 双计、LBY 单 tick flick、resolver `on_hit/on_miss`（rage 用血量差
-  确认命中）+ auto 模式 miss 后 brute-force。
-- [x] **Ghidra 命名/注释落项目**：TraceRay/GetPointContents/GetPlayerInfo/
-  CHLClient 37/38/MD5/GetSurfaceData 等函数与 vtable 标签已写入 Ghidra 项目。
-- [x] **性能（菜单掉帧）**：perf 分析定位到 RmlUi 全文档重排 60ms/次
-  （FPS 文本每 500ms 刷新触发；深层 flex 嵌套的 shrink-to-fit 递归，
-  实测每减少一层 nesting 成本减半）。修复：`#content-scroll`/`.section`
-  改 block、`.ctrl` 用 `flex: 1`（basis 0，父级不再测 max-content）、
-  `.combo` 改 block + 浮动 caret。重排尖峰 60→8-12ms；`Context::Update`
-  均值 1.3→0.5ms；Debug 构建下 GL3 渲染器每次绘制的 `glGetError`
-  改为仅 `ZEPHYRUS_GL3_LOG` 时检查，`Context::Render` CPU 1.3→0.6ms。
-  菜单打开时 overlay 每帧成本约 1.1ms（150fps 下），无掉帧感。
-  调试命令（命令通道）：`perf fps|anim on|off`、`style <selector> <prop>
-  <value|->`、`ui hide|show <id>`。
-- [ ] 游戏自身 `DoPostScreenEffects` 路径仍偶发 SIGSEGV（core：参数为
-  截断指针 `0xef11fdc8`，位于游戏 glow 渲染循环，非 zephyrus 代码）；
-  需用 **无注入 vanilla 对照**（Steam 运行时未启动时无法测试）或多轮观察确认。
+- [x] **TraceRay calling-convention crash (SIGSEGV)**: `virtual_call` passed `Ray_t`/
+  `trace_t`/`Vector` by value; under SysV, MEMORY-class aggregates go on the stack and leave
+  garbage in registers; the engine dereferences them as pointers (core: `rep stos %rax,(%rdi)`,
+  rdi=1). Fix: typed wrappers `engine_trace_ray()` / `engine_point_contents()` in `entity.hpp`,
+  all parameters as pointers; `ITraceFilter` lost its mistakenly added virtual destructor
+  (slot 0=ShouldHitEntity, 1=GetTraceType); `trace` size static_assert 0x68 (the engine clears
+  104 bytes).
+- [x] **`IPhysicsSurfaceProps::GetSurfaceData` crash**: Osiris's slot 5 is actually
+  `GetPhysicsProperties` (4 output pointers) → corrected to **slot 6** (runtime vtable +
+  disassembly verification); `surfacedata_t` field offsets measured on a core.
+- [x] **RageBot / AntiAim / FakeLag order**: rage runs first (FOV uses the real view; the autofire
+  bit is visible to fakelag on_shot / AA disable_on_shot), fakelag decides send, AA last;
+  AA does not overwrite angles on a tick the ragebot already aimed (O&E semantics, `original_angles`).
+- [x] **no-spread removal** (the server owns the randomness; UI/commands/module all deleted),
+  `MD5_PseudoRandom`/`UpdateSpread` RE results archived in `doc/csgo-re-abi.md`.
+- [x] **ESP fixes**: RML escaping for player/weapon names (weapon name with the `#SFUI_WPNHUD_`
+  prefix stripped); clear the layer on close/death; render rows no longer reference the old
+  document; use `GetAbsOrigin`; **behind-camera target projection guard** (fixes boxes
+  "stuttering/sky/underground").
+- [x] **Menu rework**: real profile management on the Config page (save/load/delete/reset/export/
+  import/folder, synchronized with `config_*.` commands), scrolling, drag viewport clamping,
+  bottom-right resize, combo/keybind popups with Off/Always/Hold/Toggle/Unset modes, keybind
+  persistence (raw SDL2 scancode storage), Escape cancels capture and restores the old value,
+  slider dragging without transition, `config_.tick()` debounce (no more synchronous disk writes
+  per change), live FPS display.
+- [x] **Align built-in UI with actual capabilities**: removed unimplemented controls
+  (Chams/Tickbase/Indicators/Skeleton/smoke/no-flash (kept)/crosshair/Max distance/Multipoint/
+  No spread).
+- [x] **Config directory split**: `~/.config/zephyrus/acr/{latest.toml,profiles}` and
+  `~/.config/zephyrus/csgo/{latest.toml,profiles}`; one-time migration of the old ACR top-level
+  config; CS:GO no longer lists ACR profiles. Version string is product-specific
+  (`Zephyrus CS:GO ...`).
+- [x] **Bug fixes**: team check inversion, backtrack `time_limit` now effective, animation records
+  only enqueued when `setup_bones` succeeds, hook installation can retry after failure (no longer
+  marks installed prematurely), re-injection resets `overlay_stop`, `server_time` reuses the cache
+  within the same tick, AA static yaw_add double count, LBY single-tick flick, resolver
+  `on_hit/on_miss` (rage confirms a hit via health delta) + brute-force after a miss in auto mode.
+- [x] **Ghidra naming/comments committed to the project**: TraceRay/GetPointContents/GetPlayerInfo/
+  CHLClient 37/38/MD5/GetSurfaceData and vtable labels written into the Ghidra project.
+- [x] **Performance (menu frame drops)**: perf analysis pinned RmlUi full-document relayout at 60ms
+  per pass (triggered by the FPS text refreshing every 500ms; shrink-to-fit recursion in deep flex
+  nesting, measured cost halved per removed nesting level). Fix: `#content-scroll`/`.section`
+  changed to block, `.ctrl` uses `flex: 1` (basis 0, parent no longer measures max-content),
+  `.combo` changed to block + floating caret. Relayout spikes 60→8-12ms; `Context::Update`
+  mean 1.3→0.5ms; in Debug builds the GL3 renderer's per-draw `glGetError` now only checks when
+  `ZEPHYRUS_GL3_LOG` is set, `Context::Render` CPU 1.3→0.6ms. Overlay cost with the menu open is
+  about 1.1ms/frame (at 150fps), no perceptible drops. Debug commands (command channel):
+  `perf fps|anim on|off`, `style <selector> <prop> <value|->`, `ui hide|show <id>`.
+- [ ] The game's own `DoPostScreenEffects` path still occasionally SIGSEGVs (core: argument is a
+  truncated pointer `0xef11fdc8`, in the game's glow render loop, not zephyrus code);
+  needs a **vanilla no-injection control** (cannot test while the Steam runtime is not running)
+  or multiple observation rounds.
 
-### 第三轮：RE 审计与删除（2026-10-10，用户报告 hook 疑似错误）
+### Round 3: RE audit and deletions (2026-10-10, user reported suspected wrong hooks)
 
-用户报告：no scope overlay 无效、no fog 会隐藏 viewmodel、开 glow 崩溃、
-ESP 仍有错误位置的闪烁、计分板/kill feed 的 bot 名消失（不注入正常）。
-要求：未亲手在 Ghidra 核对过的 hook/pattern 全部删除。
+User report: no scope overlay ineffective, no fog hides the viewmodel, enabling glow crashes,
+ESP still flickers at wrong positions, bot names disappear from the scoreboard/kill feed
+(normal without injection). Requirement: delete every hook/pattern not personally verified in
+Ghidra.
 
-- [x] **ClientMode vtable 实测**：静态实例 `0x06e04200`，构造器 `0x00ff8b20`
-  装表 `0x022d14b0`；槽 17/18/29/14 = `return true` 桩（no-fog 用它返回
-  false 会连带隐藏 viewmodel）；槽 45 = glow 渲染（跳过它并不能隐藏瞄准镜
-  叠层）。详见 re-abi §11。
-- [x] **删除**：no-fog（18）、no-scope（45）、viewmodel FOV（36）、
-  `DispatchUserMessage`（38，只做 trace 日志）、`UpdateClientSideAnimation`
-  钩子（fake matrix 未实现）、glow 全模块 + `glowObjectManager` pattern、
-  prediction 全模块（依赖从未解析的 `client_state`/`restoreEntity…`，
-  实际恒禁用）、`SetAbsOrigin`、`line_goes_through_smoke`、`is_other_enemy`
-  及全部未使用 Osiris pattern（`view_render_beams`/`weapon_system`/
+- [x] **ClientMode vtable measurements**: static instance `0x06e04200`, constructor `0x00ff8b20`
+  installs table `0x022d14b0`; slots 17/18/29/14 = `return true` stubs (no-fog returning
+  false through it also hides the viewmodel); slot 45 = glow rendering (skipping it does not
+  hide the scope overlay). See re-abi §11.
+- [x] **Removed**: no-fog (18), no-scope (45), viewmodel FOV (36),
+  `DispatchUserMessage` (38, trace logging only), `UpdateClientSideAnimation`
+  hook (fake matrix not implemented), the entire glow module + `glowObjectManager` pattern,
+  the entire prediction module (depended on never-resolved `client_state`/`restoreEntity…`,
+  effectively always disabled), `SetAbsOrigin`, `line_goes_through_smoke`, `is_other_enemy`,
+  and all unused Osiris patterns (`view_render_beams`/`weapon_system`/
   `player_resource_slot`/`planted_c4s`/`game_rules_slot`/`view_render`/
-  `send_clan_tag`/`send_datagram`）、entity 348/409/218。
-- [x] **ESP 幽灵框（错误位置闪烁）修复**：backtrack 的 `rewind` 曾把敌人的
-  abs origin / 模拟时间写到历史位置且从不恢复（未核对的 `SetAbsOrigin`
-  pattern 写操作）→ 射击后 ESP 会在旧位置画框。现只改 `cmd.tick_count`，
-  不再写实体。
-- [x] **队内判断改队伍号**（实体 vtable 128 已核对 `this+0x12C`），不再调用
-  未核对的 `isOtherEnemy`。
-- [x] **eye_position 改 netvar**：`origin + m_vecViewOffset[0]`；原 vtable 348
-  实为多参数函数，无参调用读寄存器垃圾。
-- [x] 保留并已在 Ghidra 核对的引用：entity 12/128/167/208/210、renderable 13
-  (SetupBones)、networkable 9/10、engine 8/18/19/20/37/78、CHLClient 37、
-  ClientMode 19/25、localPlayer pattern（唯一命中 `0x008f4e11`）。
-- [ ] bot 名消失回归：需实机确认（删除 `DispatchUserMessage` 钩子后复测
-  计分板 / kill feed）。
+  `send_clan_tag`/`send_datagram`), entity 348/409/218.
+- [x] **ESP ghost boxes (wrong-position flicker) fix**: backtrack's `rewind` used to write the
+  enemy's abs origin / simulation time to the historical position and never restore it (an
+  unverified `SetAbsOrigin` pattern write) → after a shot the ESP drew boxes at old positions.
+  It now only changes `cmd.tick_count` and never writes entities.
+- [x] **Team checks use the team number** (entity vtable 128 verified as `this+0x12C`); no longer
+  calls the unverified `isOtherEnemy`.
+- [x] **eye_position uses a netvar**: `origin + m_vecViewOffset[0]`; the old vtable 348
+  is actually a multi-argument function, and calling it with no arguments read garbage from
+  registers.
+- [x] References kept and verified in Ghidra: entity 12/128/167/208/210, renderable 13
+  (SetupBones), networkable 9/10, engine 8/18/19/20/37/78, CHLClient 37,
+  ClientMode 19/25, localPlayer pattern (single hit at `0x008f4e11`).
+- [ ] Bot-name-disappearance regression: needs in-game confirmation (retest the scoreboard /
+  kill feed after removing the `DispatchUserMessage` hook).
 
-### F3 实机验证（2026-10-10）
+### F3 in-game verification (2026-10-10)
 
-- [x] **修复游戏初始化从未成功**：`game::create()` 使用了错误的接口名
-      `VEngineTraceClient004`（正确为 `EngineTraceClient004`），此前所有
-      feature hook 实际从未安装。实机日志确认 `game resolved` +
-      `patterns: resolved (0 missing)` + `netvars: 1797 properties` +
-      client mode hooks（含 shouldDrawFog/dispatchUserMessage）+
-      `UpdateClientSideAnimation hook installed (index 286)`。
-- [x] 主菜单 → 地图加载：修复 overlay 安装线程超时后无人再解析 game 的问题
-      （`on_ready` 每 15 帧重试 `initialize_game`），以及菜单在功能对象
-      出现前初始化导致控件未绑定的问题（`refresh_menu_bindings`）。
-- [x] 菜单 sidebar 背景断裂修复（显式 height/align-self）。
-- [x] 命令通道实测（`dump`/`players`/`rage on`/…），`players` 输出
-      eye_yaw/layers/animstate 指针诊断。
-- [x] Glow 改为"实体列表取敌 → 仅匹配 manager 条目指针"的写入方式，
-      避免对 manager 内的可疑指针做虚调用。
-- [x] ESP 崩溃定位（core dump 回溯：`esp.cpp` collideable `virtual_call<1>`
-      在无 vtable 的对象上）：改用已验证的 netvar 包围盒
-      （`CBaseEntity->m_vecMins` 0x388 / `m_vecMaxs` 0x394），collideable
-      仅作带 vtable 校验的回退。
-- [~] AnimState 字段仍需实机确认：`m_PlayerAnimState`（0xA248）对活体返回
-      64 位指针，但 +0x28/+0x84 实测读到 0（刚 spawn 的 bot 可能尚未更新，
-      也可能偏移不对）；`anim_state_view` 已加指针/合理性校验，resolver
-      安全回退到 LBY/brute-force。
-- [ ] ESP/Glow 完整实机回归（活体 + 稳定回合）：本机测试环境在回合切换时
-      偶发 panorama_gl 崩溃（**修改前就存在**，core 回溯位于游戏自身
-      panorama_gl_client.so 渲染线程），需要在用户环境复测区分。
+- [x] **Fix game initialization never succeeding**: `game::create()` used the wrong interface name
+      `VEngineTraceClient004` (correct: `EngineTraceClient004`); all feature hooks had never
+      actually been installed before. In-game logs confirm `game resolved` +
+      `patterns: resolved (0 missing)` + `netvars: 1797 properties` + client mode hooks
+      (including shouldDrawFog/dispatchUserMessage) +
+      `UpdateClientSideAnimation hook installed (index 286)`.
+- [x] Main menu → map load: fixed the overlay installer thread timing out and nobody resolving
+      the game afterwards (`on_ready` retries `initialize_game` every 15 frames), and the menu
+      initializing before feature objects exist causing unbound controls
+      (`refresh_menu_bindings`).
+- [x] Menu sidebar background break fix (explicit height/align-self).
+- [x] Command channel tested (`dump`/`players`/`rage on`/…), `players` prints
+      eye_yaw/layers/animstate pointer diagnostics.
+- [x] Glow changed to "take enemies from the entity list → match manager entry pointers only"
+      writes, avoiding virtual calls on suspicious pointers inside the manager.
+- [x] ESP crash located (core dump backtrace: `esp.cpp` collideable `virtual_call<1>`
+      on an object without a vtable): switched to the verified netvar bounding box
+      (`CBaseEntity->m_vecMins` 0x388 / `m_vecMaxs` 0x394), with collideable
+      only as a vtable-checked fallback.
+- [~] AnimState fields still need in-game confirmation: `m_PlayerAnimState` (0xA248) returns a
+      64-bit pointer for live players, but +0x28/+0x84 measured as 0 (a freshly spawned bot may
+      not have updated yet, or the offsets are wrong); `anim_state_view` has pointer/sanity
+      checks, and the resolver safely falls back to LBY/brute-force.
+- [ ] Full ESP/Glow in-game regression (live players + stable rounds): the local test environment
+      occasionally crashes in panorama_gl on round changes (**pre-existing**, core backtrace in
+      the game's own panorama_gl_client.so render thread); needs retesting in the user's
+      environment to distinguish.
 
-> F3 剩余受限项：EnginePrediction（`restoreEntityToPredictedFrame`，re-f3 B1）、
-> fake matrix / 前向 fake pose（`SetAbsAngle`/`m_angAbsRotation`，A5/A6）、
-> 精确 hitbox 胶囊（D2/D3）、AnimState yaw 字段确认（A3 运行时复测）。
-> Ghidra 第一/二轮结果见 `doc/csgo-re-f3.md`。
+> Remaining F3 limitations: EnginePrediction (`restoreEntityToPredictedFrame`, re-f3 B1),
+> fake matrix / forward fake pose (`SetAbsAngle`/`m_angAbsRotation`, A5/A6),
+> precise hitbox capsules (D2/D3), AnimState yaw field confirmation (A3 runtime retest).
+> See `doc/csgo-re-f3.md` for the first/second Ghidra rounds.
 
-## F4. OsirisAndExtra 其余功能（Phase 4）
+## F4. Remaining OsirisAndExtra features (Phase 4)
 
-- [ ] Chams（材质系统 + KeyValues；Osiris Linux 路径可用）。
-- [ ] Glow（`GlowObjectManager`，Linux 参数路径）。
-- [ ] Visuals：no-scope zoom、remove scope overlay、no smoke/flash、天空盒、
-      world color、bullet tracers、sniper/recoil/penetration crosshair。
-- [ ] Misc：spectator list、bomb timer、hitmarker、watermark、nade trajectory、
-      fake duck、slow walk、quick stop、auto peek。
-- [ ] Knifebot、GrenadePrediction（O&E 参考）。
-- [ ] Tickbase/DT/fake latency（最后；依赖 `SendDatagram`/`sv_maxusrcmdprocessticks` 逆向）。
+- [ ] Chams (material system + KeyValues; Osiris Linux path available).
+- [ ] Glow (`GlowObjectManager`, Linux argument path).
+- [ ] Visuals: no-scope zoom, remove scope overlay, no smoke/flash, skybox,
+      world color, bullet tracers, sniper/recoil/penetration crosshair.
+- [ ] Misc: spectator list, bomb timer, hitmarker, watermark, nade trajectory,
+      fake duck, slow walk, quick stop, auto peek.
+- [ ] Knifebot, GrenadePrediction (O&E reference).
+- [ ] Tickbase/DT/fake latency (last; depends on RE of `SendDatagram`/`sv_maxusrcmdprocessticks`).
 
-## F5. Resolver / AA 迭代（Phase 5，持续）
+## F5. Resolver / AA iteration (Phase 5, ongoing)
 
-- [ ] 命中反馈闭环：`weapon_fire`/`bullet_impact`/`player_hurt`/`player_death`。
-- [ ] brute-force 桶持久化（按 userid）+ miss 分类（resolver/spread/无伤害）。
-- [ ] resolver 调试 UI：模式/侧向/命中率/最近 miss；命令 `resolver dump`。
-- [ ] AA 反解析随机化：seed、周期随机、按状态分档；实测双客户端校准。
+- [ ] Hit-feedback loop: `weapon_fire`/`bullet_impact`/`player_hurt`/`player_death`.
+- [ ] Brute-force bucket persistence (by userid) + miss classification (resolver/spread/no damage).
+- [ ] Resolver debug UI: mode/side/hit rate/last miss; command `resolver dump`.
+- [ ] AA anti-resolve randomization: seed, periodic randomness, per-state tiers; calibrate with
+      two clients.
 
-## RE. 逆向清单（Phase 0/3/4）
+## RE. Reverse-engineering checklist (Phase 0/3/4)
 
-> **ABI / vtable / 结构体偏移的实测汇总见 [csgo-re-abi.md](csgo-re-abi.md)**；
-> Ghidra 项目内的函数命名与注释同步更新（TraceRay、GetPointContents、
-> GetPlayerInfo、CHLClient 37/38、MD5_PseudoRandom、GetSurfaceData 等）。
+> **Measured ABI / vtable / struct offsets are summarized in [csgo-re-abi.md](csgo-re-abi.md)**;
+> function names and comments in the Ghidra project are kept in sync (TraceRay,
+> GetPointContents, GetPlayerInfo, CHLClient 37/38, MD5_PseudoRandom, GetSurfaceData, etc.).
 
-- [x] Ghidra 导入 `client_client.so` + `engine_client.so`（项目 `csgo`）；
-  `vphysics_client.so` 亦已导入（physics surface props 验证）。
-- [x] Osiris Linux pattern 对本地二进制校验脚本化。
-- [ ] `CCSPlayerAnimState` 字段偏移（eyeYaw/footYaw/lastUpdateTime/duckAdditional/
-      onGround/walkToRunTransition）。
-- [ ] `m_flPoseParameter` 读写 / `GetPoseParameter`。
-- [ ] 动画层 `m_AnimOverlay`（weight/cycle/playbackrate）。
-- [x] `UTIL_TraceToExit`（autowall）→ 引擎 trace 重写并使用
-  `IPhysicsSurfaceProps`（GetSurfaceData=槽 6，surfacedata 偏移 core 实测）。
-- [ ] `CNetChan`/`CClientState`（chokedPackets、SendDatagram）；
-  `CClientState` 全局与 getter 已命名（`CClientState_GetGlobal/GetByIndex`）。
-- [~] 随机种子/`RandomFloat`：MD5_PseudoRandom(digest+6) 与 UpdateSpread
-  已定位并存档；功能因服务端权威已移除。
-- [ ] `sv_maxusrcmdprocessticks` 值（Tickbase/DT 前置）。
-- [x] 每个偏移记录：Ghidra 地址 + pattern + 校验日志（见 re-abi 文档）。
+- [x] Ghidra imported `client_client.so` + `engine_client.so` (project `csgo`);
+  `vphysics_client.so` also imported (physics surface props verification).
+- [x] Osiris Linux pattern validation against the local binaries is scripted.
+- [ ] `CCSPlayerAnimState` field offsets (eyeYaw/footYaw/lastUpdateTime/duckAdditional/
+      onGround/walkToRunTransition).
+- [ ] `m_flPoseParameter` read/write / `GetPoseParameter`.
+- [ ] Animation layers `m_AnimOverlay` (weight/cycle/playbackrate).
+- [x] `UTIL_TraceToExit` (autowall) → engine trace rewrite using
+  `IPhysicsSurfaceProps` (GetSurfaceData=slot 6, surfacedata offsets measured on a core).
+- [ ] `CNetChan`/`CClientState` (chokedPackets, SendDatagram);
+  `CClientState` globals and getters named (`CClientState_GetGlobal/GetByIndex`).
+- [~] Random seed/`RandomFloat`: MD5_PseudoRandom(digest+6) and UpdateSpread
+  located and archived; the feature was removed because the server is authoritative.
+- [ ] `sv_maxusrcmdprocessticks` value (Tickbase/DT prerequisite).
+- [x] Every offset recorded: Ghidra address + pattern + verification log (see the re-abi doc).
 
-## T. 测试
+## T. Testing
 
-- [ ] 本地 `-insecure` + `sv_lan 1` + bots：瞄准/回溯/移动。
-- [ ] 双客户端/LAN：desync、resolver、fakelag 行为验证。
-- [ ] 社区 HvH 服（用户复测）：实战 log + 调参。
+- [ ] Local `-insecure` + `sv_lan 1` + bots: aim/backtrack/movement.
+- [ ] Two clients/LAN: desync, resolver, fakelag behaviour verification.
+- [ ] Community HvH servers (user retest): live logs + tuning.
